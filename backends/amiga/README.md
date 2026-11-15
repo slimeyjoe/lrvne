@@ -129,7 +129,7 @@ tool type is skipped (there is nowhere to say so).
 | `VOLUME`, `VOICEVOLUME` | the engine's | percent; Paula's `AUDxVOL` or AHI's request volume where the voice has a stream of its own, else the samples are scaled |
 | `RATE` | 11025 (68k, WarpOS), 44100 (AROS) | output sample rate asked for; the driver reports what it really plays. 22050 sounds better but can cost more than a 68040/25 has (see "Audio") |
 | `NOAUDIO` | off | no sound at all; `AUDIO=none` is the same |
-| `OPN` | | `lite` is the only FM core in these builds |
+| `OPN` | `lite` | the only FM core in these builds; `lite2` oversamples its FM part (about 1.6 times the CPU: a 68060) |
 | `MODE` | HiRes Laced (`0x8004`) where the page suits it, else `BestModeID` | display mode id of the own screen; Picasso96 promotion of the default is fine |
 | `WINDOW`, `PUBSCREEN` | off, the default public screen | the picture in a window on that screen; falls back to the own screen where it cannot be |
 | `SCALE` | 1 | page pixels shown 1-3 times as large; `auto` = the largest that fits; on the own screen a graphics card mode |

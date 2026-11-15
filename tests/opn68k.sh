@@ -38,7 +38,7 @@ $M68K_CC $cflags -DLRV_OPN_ASM_68K '-D__reg(r)=' -c -o "$out/opn_asm.o" "$here/s
 # the reference: the C loop, its external names out of the way
 $M68K_CC $cflags -Dlrv_opn_lite_ops=ref_opn_lite_ops -Dlrv_opn_lite_pow=ref_opn_lite_pow \
     -Dlrv_opn_lite_wave=ref_opn_lite_wave -Dlrv_opn_lite_eg_due=ref_opn_lite_eg_due \
-    -Dlrv_opn_lite_ssg_output=ref_opn_lite_ssg_output -Dlrv_opn_select=ref_opn_select \
+    -Dlrv_opn_lite_ssg_output=ref_opn_lite_ssg_output -Dlrv_opn_select=ref_opn_select -Dlrv_opn_flags=ref_opn_flags \
     -c -o "$out/opn_ref.o" "$here/src/snd/opn_lite.c"
 $M68K_CC $cflags -c -o "$out/opn68k.o" "$here/tests/opn68k/opn68k.c"
 $VASM -Felf -quiet -o "$out/opn_lite_68k.o" "$here/src/snd/opn_lite_68k.s"

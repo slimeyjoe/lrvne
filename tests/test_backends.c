@@ -109,6 +109,9 @@ static void test_args(void)
     CHECK(!strcmp(a.pak, "game.pak") && !strcmp(a.cfg.lang, "en") && !strcmp(a.storage, "saves"));
     CHECK(a.cfg.volume == 40 && a.cfg.aux_volume == 70 && a.cfg.audio_rate == 22050);
     CHECK(a.cfg.opn_core == 1 && a.no_voice == 1);
+    CHECK(parse(&a, 2, "--opn", "lite2") == LRV_ARGS_RUN && a.cfg.opn_core == 2);
+    CHECK(parse(&a, 2, "--opn", "ymfm") == LRV_ARGS_RUN && a.cfg.opn_core == 0);
+    CHECK(parse(&a, 2, "--opn", "lite3") == LRV_ARGS_BAD);
     CHECK(parse(&a, 7, "--voice-pak", "v.pak", "--autoplay", "ok:5", "--control", "--max-ticks",
                 "99") == LRV_ARGS_RUN);
     CHECK(!strcmp(a.voice_pak, "v.pak") && !strcmp(a.autoplay, "ok:5") && a.control);

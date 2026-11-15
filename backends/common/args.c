@@ -24,7 +24,9 @@ static const struct lrv_option g_common[O_COUNT] = {
     { "volume", LRV_OPT_ARG, "0..100", "the music's volume" },
     { "no-audio", LRV_OPT_FLAG, 0, "no sound at all" },
     { "rate", LRV_OPT_ARG, "HZ", "audio output rate" },
-    { "opn", LRV_OPT_ARG, "ymfm|lite", "the FM chip emulation (lite: for slow machines)" },
+    { "opn", LRV_OPT_ARG, "ymfm|lite|lite2",
+      "the FM chip emulation (lite: for slow machines; lite2: its FM\n"
+      "part oversampled, less aliasing for 1.6 times the work)" },
     { "voice-pak", LRV_OPT_ARG, "FILE",
       "the voice pack (default: <pack>_voice.pak next to the game pack)" },
     { "no-voice", LRV_OPT_FLAG, 0, "no voice even when the voice pack is there" },
@@ -135,9 +137,14 @@ static int common_option(struct lrv_args *a, int which, const char *arg)
     case O_RATE:
         return !lrv_args_int(arg, 1000, 384000, &a->rate);
     case O_OPN:
-        if (strcmp(arg, "ymfm") && strcmp(arg, "lite"))
+        if (!strcmp(arg, "ymfm"))
+            a->cfg.opn_core = 0;
+        else if (!strcmp(arg, "lite"))
+            a->cfg.opn_core = 1;
+        else if (!strcmp(arg, "lite2"))
+            a->cfg.opn_core = 2;
+        else
             return 1;
-        a->cfg.opn_core = !strcmp(arg, "lite");
         return 0;
     case O_MAX_TICKS:
         return !lrv_args_int(arg, 1, 0x7fffffffL, &a->max_ticks);

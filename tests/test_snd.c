@@ -263,7 +263,9 @@ static void test_cores(void)
     /* the same again: nothing is left behind between instances */
     CHECK(core_sum(&hal, &lrv_opn_lite_ops, 22050, 0, 0, &rate, &peak) == 0xB79BB439u);
     CHECK(th_live == 0);
-    CHECK(lrv_opn_select(1) == &lrv_opn_lite_ops);
+    CHECK(lrv_opn_select(1) == &lrv_opn_lite_ops && lrv_opn_flags(1) == 0);
+    CHECK(lrv_opn_select(2) == &lrv_opn_lite_ops && lrv_opn_flags(2) == LRV_OPN_OVERSAMPLE);
+    CHECK(lrv_opn_flags(0) == 0);
 #ifdef LRV_HAVE_YMFM
     CHECK(lrv_opn_select(0) == &lrv_opn_ymfm_ops);
     CHECK(core_sum(&hal, &lrv_opn_ymfm_ops, 22050, 0, 0, &rate, &peak) == 0x9A036301u);
