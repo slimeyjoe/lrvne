@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* lrvne - common definitions: version, error codes and the helpers every module uses on top of
+/* lrvne, the Lightweight Retro Visual Novel Engine - common definitions: version, error codes and the helpers every module uses on top of
  * the HAL (formatted logging, checked allocation).
  *
  * Conventions of the whole library:

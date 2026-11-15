@@ -1,6 +1,7 @@
-# lrvne
+# lrvne — Lightweight Retro Visual Novel Engine
 
-A low-level layer for re-implementations of retro visual novel engines.
+The common low-level layer for re-implementations of retro visual novel
+engines.
 
 Engines for old visual novels differ in their script interpreters, picture
 formats and music drivers, but underneath they need the same things: a frame
@@ -8,8 +9,8 @@ loop paced like the original machine, a planar frame buffer shown on a modern
 display, an FM sound chip, fonts, an asset pack, saves, input, and a way to be
 tested without a human. lrvne is that common part, written once.
 
-It is **not** an engine and contains nothing of any game. An engine built on
-it adds the interpreter and formats of one original engine; a game is then a
+On its own it runs no game and contains nothing of any game. An engine built
+on it adds the interpreter and formats of one original engine; a game is then a
 *profile* of that engine: data in the game's pack, never code in the engine.
 
 ```
