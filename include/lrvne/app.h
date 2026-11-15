@@ -13,10 +13,13 @@
  * What a backend derives from the app and the game:
  *   pack      --pak FILE; else the pack appended to the executable; else <program>.pak next to
  *             the executable (<program> = the executable's own file name, so a renamed copy
- *             of an engine finds its game); else the only *.pak there; then the same in the
- *             current directory. The voice pack is <pack>_voice.pak beside the pack.
+ *             of an engine finds its game); else the only *.pak there (voice packs aside);
+ *             then the same in the current directory. The voice pack is <pack>_voice.pak
+ *             beside the pack.
  *   storage   --storage DIR; else <user data dir>/<app->name>/<game id>, the id being what
- *             the engine passes to hal->storage_open (the profile's `id`).
+ *             the engine passes to hal->storage_open (the profile's `id`). The headless
+ *             backend keeps to the current directory instead: a test never touches a
+ *             player's saves.
  *   title     what the engine puts in lrv_video_cfg.title (the profile's `title`). */
 #ifndef LRVNE_APP_H
 #define LRVNE_APP_H
@@ -59,6 +62,8 @@ struct lrv_app {
     int noptions;
     int (*option)(void *ctx, const char *name, const char *arg);
     const char *help;           /* optional: text appended to the usage (the keys) */
+    int host_pointer;           /* 1: the game draws no mouse pointer of its own, so the
+                                 * host's stays visible over the picture */
 
     /* Runs the game until it quits. Returns the process exit code. */
     int (*run)(void *ctx, const struct lrv_hal *hal, const struct lrv_run_cfg *cfg);
