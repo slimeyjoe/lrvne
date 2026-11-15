@@ -20,7 +20,10 @@
  *             the engine passes to hal->storage_open (the profile's `id`). The headless
  *             backend keeps to the current directory instead: a test never touches a
  *             player's saves.
- *   title     what the engine puts in lrv_video_cfg.title (the profile's `title`). */
+ *   title     what the engine puts in lrv_video_cfg.title (the profile's `title`).
+ * A backend for a host with other conventions keeps to the same rules in the host's terms
+ * (the Amiga family: options as AmigaDOS keywords and tool types, the pack in PROGDIR:, the
+ * saves in PROGDIR:saves/<game id>; backends/amiga/README.md). */
 #ifndef LRVNE_APP_H
 #define LRVNE_APP_H
 

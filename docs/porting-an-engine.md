@@ -29,7 +29,10 @@ all: $(EXE)
 
 Use `$(BUILD)` and `$(EXE)` only after the include (a sanitizer build gets a
 directory of its own). Choose the switches the engine needs (`LRVNE_YMFM`,
-`LRVNE_OPUS`, `LRVNE_CONTROL`). Remove the old layer's sources from `APP_SRCS`
+`LRVNE_OPUS`, `LRVNE_CONTROL`). The same Makefile builds the engine for every
+target of `mk/target/`: `make TARGET=amiga` (or `warpos`, `aros`) needs only
+the cross toolchain; `backends/amiga/README.md` says what an engine should
+check for it and how its release archives are made. Remove the old layer's sources from `APP_SRCS`
 as the steps below replace them.
 
 ## 2. main and the app
@@ -46,7 +49,10 @@ int main(int argc, char **argv) { return lrv_app_main(&my_app, argc, argv); }
 The options every engine has (`--pak`, `--lang`, `--storage`, `--volume`,
 `--rate`, `--autoplay`, `--control`, ...) now come from the backend and reach
 `run` as a `struct lrv_run_cfg`. Paths are the backend's business: the engine
-no longer builds a file name anywhere.
+no longer builds a file name anywhere. The engine's own options are data
+(`app->options`), so they also work where options are not spelled `--name`:
+on an Amiga `--view` is the keyword `VIEW` of the shell and a tool type of the
+icon.
 
 ## 3. sys
 
