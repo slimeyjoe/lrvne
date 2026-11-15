@@ -82,6 +82,9 @@ void lrv_sys_cpu(struct lrv_sys *s, uint32_t n);
 int  lrv_sys_quitting(const struct lrv_sys *s);
 /* ... and it is a reset, not a quit. */
 int  lrv_sys_resetting(const struct lrv_sys *s);
+/* Asks for a quit from inside the engine (its own "quit" menu entry, a tool mode that is done):
+ * the same as the host closing the window. */
+void lrv_sys_request_quit(struct lrv_sys *s);
 /* The reset was done: forget it and the type-ahead. */
 void lrv_sys_reset_done(struct lrv_sys *s);
 

@@ -83,6 +83,11 @@ int lrv_sys_resetting(const struct lrv_sys *s)
     return s->reset_requested && !s->quit_requested && !s->emergency_quit;
 }
 
+void lrv_sys_request_quit(struct lrv_sys *s)
+{
+    s->quit_requested = 1;
+}
+
 void lrv_sys_reset_done(struct lrv_sys *s)
 {
     s->reset_requested = 0;
