@@ -9,13 +9,19 @@
  * Delivery follows the backend (lrvne/hal.h):
  *   push   lrv_mixer_pump, which the engine registers as an LRV_HOOK_PUMP hook, asks the sink
  *          once a frame how much it can take, renders that much and pushes it.
- *   pull   the backend's audio thread or interrupt calls the mixer's render callback, which
- *          takes the audio lock for the block. The pump does nothing.
+ *   pull   the backend's audio thread or interrupt calls the mixer's callbacks (the struct
+ *          lrv_audio_source it was opened with), which take the audio lock for the block.
+ *          The pump does nothing.
  * In pull mode the sources run on the backend's thread, so every call the engine makes into
  * their state (the sequencer, the write queue, a clip's ring) is bracketed with
  * lrv_mixer_lock / lrv_mixer_unlock, which are no-ops in push mode. The lock is never taken
  * twice: nothing called with it held takes it again, and the backend does not hold it when it
- * calls the render callback.
+ * calls the mixer.
+ *
+ * A pulling backend that has fallen behind may skip a block instead of rendering it
+ * (lrv_audio_source.skip): the mixer then lets the same time pass in its sources, through the
+ * main source's skip hook where it has one, so the music is silent for the block but neither
+ * the sequencer nor a clip loses its place.
  *
  * Without an audio device the mixer still works as a renderer: lrv_mixer_render gives the
  * same blocks to whoever asks (an offline render of a song; a silent clock kept by the idle
@@ -35,7 +41,11 @@ typedef void lrv_mixer_aux_fn(void *ctx, int16_t *mono, int frames, uint32_t rat
 
 struct lrv_mixer_cfg {
     lrv_mixer_render_fn *render;    /* the main source; NULL = silence */
-    void *ctx;
+    /* optional: the main source for a skipped block. It advances exactly as render does for
+     * `frames` samples without synthesising them and writes silence (lrv_opnq_skip). NULL =
+     * the source cannot: a skipped block is rendered like any other. */
+    lrv_mixer_render_fn *skip;
+    void *ctx;                      /* of render and skip */
     lrv_mixer_aux_fn *aux;          /* NULL = none; lrv_mixer_set_aux changes it later */
     void *aux_ctx;
     /* optional: called by the pump once a frame while there is no audio device, for an engine
@@ -95,6 +105,9 @@ void lrv_mixer_pump(void *m);
 /* Renders the next `frames` samples of the mix, without locking and without a device: main
  * source, volume, auxiliary source. Silence before lrv_mixer_start. */
 void lrv_mixer_render(struct lrv_mixer *m, int16_t *mono, int frames);
+/* The same span of time as a skipped block: the main source's skip hook in place of its
+ * render (its silence is not scaled), the auxiliary source as always. */
+void lrv_mixer_skip(struct lrv_mixer *m, int16_t *mono, int frames);
 
 /* ---- sample helpers --------------------------------------------------------------------- */
 

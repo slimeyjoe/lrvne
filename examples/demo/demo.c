@@ -288,6 +288,7 @@ static int demo_run(void *ctx, const struct lrv_hal *hal, const struct lrv_run_c
 {
     struct demo *d = ctx;
     struct lrv_video_cfg video;
+    struct lrv_audio_source src;
     size_t plane;
     int p, speed, volume = cfg->volume < 0 ? 0 : cfg->volume ? cfg->volume : 100;
 
@@ -319,7 +320,10 @@ static int demo_run(void *ctx, const struct lrv_hal *hal, const struct lrv_run_c
 
     /* the backend may accept another rate than the one asked for, or none */
     d->amplitude = 3000 * volume / 100;
-    d->rate = cfg->audio_rate > 0 ? hal->audio_open(cfg->audio_rate, demo_render, d) : 0;
+    src.render = demo_render;
+    src.skip = 0;
+    src.ctx = d;
+    d->rate = cfg->audio_rate > 0 ? hal->audio_open(cfg->audio_rate, &src) : 0;
     if (d->rate && !hal->audio_lock)
         lrv_sys_add_hook(&d->sys, LRV_HOOK_PUMP, demo_pump, d);
 

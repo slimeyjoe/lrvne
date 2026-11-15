@@ -119,8 +119,10 @@ uint32_t lrv_opnq_pending(const struct lrv_opnq *q);
 /* Renders the next `frames` samples: runs the sequencer, applies the writes that fall into the
  * block, renders the core between them. The signature is the mixer's main source. */
 void lrv_opnq_render(void *q, int16_t *mono, int frames);
-/* The same in time, but the core is not run and the block is silence: for a backend that
- * cannot keep up and drops a block rather than fall behind. */
+/* The same in time, but the core is not run and the block is silence: the sequencer advances
+ * and every write reaches the core at its place, so the music goes on exactly where it would
+ * have been. For a backend that cannot keep up and drops a block rather than fall behind; the
+ * mixer's skip hook (lrv_mixer_cfg.skip). */
 void lrv_opnq_skip(void *q, int16_t *mono, int frames);
 /* Renders a run of n samples of the block lrv_opnq_render is advancing: the callback a
  * frame-driven sequencer is given. */

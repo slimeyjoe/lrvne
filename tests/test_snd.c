@@ -636,6 +636,7 @@ static uint32_t song_sum(const struct lrv_opn_ops *ops, uint32_t want, int kind,
     }
     memset(&mcfg, 0, sizeof mcfg);
     mcfg.render = lrv_opnq_render;
+    mcfg.skip = lrv_opnq_skip;
     mcfg.ctx = &q;
     mcfg.gain_floor = kind;         /* each as the engine with that kind of driver rounds */
     lrv_mixer_init(&mx, &hal, &mcfg);
@@ -644,7 +645,7 @@ static uint32_t song_sum(const struct lrv_opn_ops *ops, uint32_t want, int kind,
     while (rate && total < (uint64_t)rate * 3 / 2) {
         int n = chunk_size(i);
         if (skip_every && i % skip_every == skip_every - 1)
-            lrv_opnq_skip(&q, buf, n);
+            lrv_mixer_skip(&mx, buf, n);        /* a backend that fell behind */
         else
             lrv_mixer_render(&mx, buf, n);
         i++;
@@ -678,8 +679,7 @@ static void test_queue_song(void)
 static struct {
     int accept;                         /* the rate audio_open answers, 0 = no audio */
     int asked;                          /* the rate it was asked for */
-    void (*cb)(void *ctx, int16_t *pcm, int frames);
-    void *cb_ctx;
+    struct lrv_audio_source src;        /* what audio_open was given */
     int space;                          /* what audio_space reports */
     int16_t pushed[8192];
     int npushed, pushes, closed;
@@ -688,11 +688,10 @@ static struct {
     int vol_which, vol_percent;
 } fa;
 
-static int fa_open(int rate, void (*render)(void *ctx, int16_t *pcm, int frames), void *ctx)
+static int fa_open(int rate, const struct lrv_audio_source *source)
 {
     fa.asked = rate;
-    fa.cb = render;
-    fa.cb_ctx = ctx;
+    fa.src = *source;
     return fa.accept;
 }
 
@@ -743,6 +742,7 @@ static struct {
     int16_t val;                        /* the main source's constant sample */
     int16_t aux;                        /* what the auxiliary source adds */
     int calls, frames, idles;
+    int skips, skipped;                 /* calls of the skip hook, and their frames */
     uint32_t aux_rate;
 } src;
 
@@ -754,6 +754,14 @@ static void src_render(void *ctx, int16_t *mono, int frames)
         mono[i] = src.val;
     src.calls++;
     src.frames += frames;
+}
+
+static void src_skip(void *ctx, int16_t *mono, int frames)
+{
+    (void)ctx;
+    memset(mono, 0, sizeof *mono * (size_t)frames);
+    src.skips++;
+    src.skipped += frames;
 }
 
 static void src_aux(void *ctx, int16_t *mono, int frames, uint32_t rate)
@@ -891,16 +899,16 @@ static void test_mixer_pull(void)
     src_cfg(&cfg);
     lrv_mixer_init(&mx, &hal, &cfg);
     fa.accept = 44100;
-    CHECK(lrv_mixer_open(&mx, 44100) == 44100 && fa.cb != 0);
+    CHECK(lrv_mixer_open(&mx, 44100) == 44100 && fa.src.render != 0 && fa.src.skip != 0);
 
     /* the backend may pull as soon as the stream is open: silence until the start */
     src.val = 77;
     buf[0] = buf[63] = 1;
-    fa.cb(fa.cb_ctx, buf, 64);
+    fa.src.render(fa.src.ctx, buf, 64);
     CHECK(buf[0] == 0 && buf[63] == 0 && src.calls == 0);
     lrv_mixer_start(&mx, 0);
     fa.locks = 0;
-    fa.cb(fa.cb_ctx, buf, 64);
+    fa.src.render(fa.src.ctx, buf, 64);
     CHECK(buf[0] == 77 && buf[63] == 77 && src.frames == 64);
     CHECK(fa.locks == 1 && fa.depth == 0);      /* the callback holds the lock for the block */
 
@@ -914,15 +922,40 @@ static void test_mixer_pull(void)
     lrv_mixer_unlock(&mx);
     lrv_mixer_set_volume(&mx, 50);
     lrv_mixer_set_aux(&mx, 0, 0);
-    fa.cb(fa.cb_ctx, buf, 4);
+    fa.src.render(fa.src.ctx, buf, 4);
     CHECK(buf[0] == 38 && fa.depth == 0 && fa.max_depth == 1);
+
+    /* a backend that fell behind skips a block: without a skip hook the source is rendered
+     * all the same (its time must pass), with one the hook is called in its place. The block
+     * is the hook's silence, unscaled, and whatever the auxiliary source adds; the lock is
+     * taken once, by the mixer */
+    src.frames = 0;
+    fa.locks = 0;
+    fa.src.skip(fa.src.ctx, buf, 8);
+    CHECK(buf[0] == 38 && buf[7] == 38 && src.frames == 8 && src.skips == 0);
+    CHECK(fa.locks == 1 && fa.depth == 0);
+    lrv_mixer_lock(&mx);
+    mx.cfg.skip = src_skip;
+    lrv_mixer_unlock(&mx);
+    lrv_mixer_set_aux(&mx, src_aux, 0);
+    src.aux = 5;
+    fa.locks = 0;
+    fa.src.skip(fa.src.ctx, buf, 8);
+    CHECK(buf[0] == 5 && buf[7] == 5 && src.frames == 8 && src.skips == 1 && src.skipped == 8);
+    CHECK(fa.locks == 1 && fa.depth == 0 && fa.max_depth == 1);
+    fa.src.render(fa.src.ctx, buf, 4);          /* and the next block is rendered again */
+    CHECK(buf[0] == 43 && src.frames == 12 && src.skips == 1);
+    lrv_mixer_skip(&mx, buf, 2);                /* the same without the lock, for a renderer */
+    CHECK(buf[0] == 5 && src.skipped == 10 && fa.depth == 0);
 
     lrv_mixer_close(&mx);
     CHECK(fa.closed == 1 && fa.max_depth == 1);
     /* a late callback of a backend that is slow to stop: silence, the source is not called */
-    src.calls = 0;
-    fa.cb(fa.cb_ctx, buf, 4);
+    src.calls = src.skips = 0;
+    fa.src.render(fa.src.ctx, buf, 4);
     CHECK(buf[0] == 0 && src.calls == 0);
+    fa.src.skip(fa.src.ctx, buf, 4);
+    CHECK(buf[0] == 0 && src.skips == 0);
 }
 
 /* ---- the voice player ----------------------------------------------------------------------- */

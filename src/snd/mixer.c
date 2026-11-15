@@ -38,12 +38,15 @@ void lrv_mixer_init(struct lrv_mixer *m, const struct lrv_hal *hal,
     m->gain = 256;
 }
 
-void lrv_mixer_render(struct lrv_mixer *m, int16_t *mono, int frames)
+/* a block of the mix; skipping, the main source lets the time pass where it can */
+static void mix(struct lrv_mixer *m, int16_t *mono, int frames, int skipping)
 {
     if (frames <= 0)
         return;
     if (!m->live || !m->cfg.render) {
         memset(mono, 0, sizeof *mono * (size_t)frames);
+    } else if (skipping && m->cfg.skip) {
+        m->cfg.skip(m->cfg.ctx, mono, frames);
     } else {
         m->cfg.render(m->cfg.ctx, mono, frames);
         if (m->gain != 256)
@@ -53,21 +56,43 @@ void lrv_mixer_render(struct lrv_mixer *m, int16_t *mono, int frames)
         m->cfg.aux(m->cfg.aux_ctx, mono, frames, m->rate);
 }
 
-/* pull mode: the backend's audio thread or interrupt */
+void lrv_mixer_render(struct lrv_mixer *m, int16_t *mono, int frames)
+{
+    mix(m, mono, frames, 0);
+}
+
+void lrv_mixer_skip(struct lrv_mixer *m, int16_t *mono, int frames)
+{
+    mix(m, mono, frames, 1);
+}
+
+/* pull mode: the backend's audio thread or interrupt, which does not hold the lock */
 static void mixer_pull(void *ctx, int16_t *pcm, int frames)
 {
     struct lrv_mixer *m = ctx;
     lrv_mixer_lock(m);
-    lrv_mixer_render(m, pcm, frames);
+    mix(m, pcm, frames, 0);
+    lrv_mixer_unlock(m);
+}
+
+static void mixer_pull_skip(void *ctx, int16_t *pcm, int frames)
+{
+    struct lrv_mixer *m = ctx;
+    lrv_mixer_lock(m);
+    mix(m, pcm, frames, 1);
     lrv_mixer_unlock(m);
 }
 
 int lrv_mixer_open(struct lrv_mixer *m, int rate)
 {
+    struct lrv_audio_source src;
     int got;
     if (m->open || rate <= 0 || !m->hal->audio_open)
         return 0;
-    got = m->hal->audio_open(rate, mixer_pull, m);
+    src.render = mixer_pull;
+    src.skip = mixer_pull_skip;
+    src.ctx = m;
+    got = m->hal->audio_open(rate, &src);
     if (got <= 0)
         return 0;
     /* a pulling backend may be calling mixer_pull already: it renders silence until

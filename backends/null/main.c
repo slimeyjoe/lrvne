@@ -12,7 +12,9 @@
  *   snapshots     the frames at the spec's snap: ticks, as lines on stdout (shot.h)
  *   pictures      --shot-every N writes every N-th frame as <--shot-dir>/shot_<tick>.ppm
  *   sound         --wav FILE records what the engine plays, taken at the pace of the video
- *                 mode's frames; --render-wav FILE --song NAME [--seconds S] plays one song
+ *                 mode's frames: pushed by the engine, or with --audio pull asked for by the
+ *                 backend as a device with a callback does (the audio lock then only checks
+ *                 the contract: taking it twice is fatal); --render-wav FILE --song NAME [--seconds S] plays one song
  *                 offline through the engine's render_music and exits
  *   memory        --memstat prints the peak of the engine's allocations on stderr
  * --present-test runs the synthetic presentation test (ptest.h) in the video mode the engine
@@ -63,7 +65,10 @@ static const char *g_render, *g_song;
 static double g_seconds = 30.0;
 static const char *g_game_wav;
 static int g_aux_out;
+static int g_audio_pull;
 static int g_memstat;
+
+static void l_fatal(const char *msg);
 
 static uint32_t frame_ns(void)
 {
@@ -185,19 +190,20 @@ static void aux_tick(void)
         g_aux_queued = 0;
 }
 
-/* ---- audio: push mode into --wav, or nowhere ---------------------------------------------- */
+/* ---- audio: into --wav, or nowhere -------------------------------------------------------- */
 
 static struct lrv_wav g_wav;
 static int g_audio_rate;
 static uint64_t g_audio_acc;
 static long g_audio_owed;               /* frames the pretend device takes now */
+static struct lrv_audio_source g_audio_src;     /* --audio pull */
+static int g_audio_locked;
 
-static int a_open(int rate, void (*render)(void *ctx, int16_t *pcm, int frames), void *ctx)
+static int a_open(int rate, const struct lrv_audio_source *src)
 {
-    (void)render;
-    (void)ctx;
     if (!g_game_wav || rate <= 0)
         return 0;
+    g_audio_src = *src;
     if (lrv_wav_open(&g_wav, g_game_wav) != LRV_OK) {
         perror(g_game_wav);
         return 0;
@@ -235,14 +241,40 @@ static void a_push(const int16_t *pcm, int frames)
     g_audio_owed -= frames;
 }
 
+/* --audio pull: the device's callback, at the end of a frame and without the lock */
+static void a_pull(void)
+{
+    int16_t pcm[1024];
+    while (g_audio_owed > 0) {
+        int n = g_audio_owed > 1024 ? 1024 : (int)g_audio_owed;
+        g_audio_src.render(g_audio_src.ctx, pcm, n);
+        a_push(pcm, n);
+    }
+}
+
+/* nothing runs beside the engine here, so the lock only holds the engine to the contract */
+static void a_lock(void)
+{
+    if (g_audio_locked++)
+        l_fatal("the audio lock was taken twice");
+}
+
+static void a_unlock(void)
+{
+    g_audio_locked--;
+}
+
 /* ---- time and input ----------------------------------------------------------------------- */
 
 static void t_frame_wait(void)
 {
     g_tick++;
     aux_tick();
-    if (g_audio_rate)
+    if (g_audio_rate) {
         g_audio_owed += frames_per_tick(g_audio_rate, &g_audio_acc);
+        if (g_audio_pull)
+            a_pull();
+    }
     if ((long)g_tick > g_max_ticks) {
         fprintf(stderr, "%s: max ticks reached\n", g_app->name);
         if (g_control)
@@ -332,6 +364,7 @@ static const struct lrv_option g_options[] = {
     { "shot-dir", LRV_OPT_ARG, "DIR", "where the pictures go (default: here)" },
     { "present-test", LRV_OPT_FLAG, 0, "print the snapshots of the presentation test and exit" },
     { "wav", LRV_OPT_ARG, "FILE", "record what the engine plays" },
+    { "audio", LRV_OPT_ARG, "push|pull", "how the pretend device gets the sound (default push)" },
     { "render-wav", LRV_OPT_ARG, "FILE", "play --song offline into FILE and exit" },
     { "song", LRV_OPT_ARG, "NAME", "the song of --render-wav" },
     { "seconds", LRV_OPT_ARG, "S", "how long --render-wav plays (default 30)" },
@@ -354,6 +387,10 @@ static int option(struct lrv_args *a, const char *name, const char *arg)
         g_present_test = 1;
     } else if (!strcmp(name, "wav")) {
         g_game_wav = arg;
+    } else if (!strcmp(name, "audio")) {
+        if (strcmp(arg, "push") && strcmp(arg, "pull"))
+            return 1;
+        g_audio_pull = !strcmp(arg, "pull");
     } else if (!strcmp(name, "render-wav")) {
         g_render = arg;
     } else if (!strcmp(name, "song")) {
@@ -432,8 +469,13 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
     hal.input_flush = i_flush;
     hal.audio_open = a_open;
     hal.audio_close = a_close;
-    hal.audio_space = a_space;
-    hal.audio_push = a_push;
+    if (g_audio_pull) {
+        hal.audio_lock = a_lock;
+        hal.audio_unlock = a_unlock;
+    } else {
+        hal.audio_space = a_space;
+        hal.audio_push = a_push;
+    }
     hal.storage_open = lrv_paths_storage_open;
     hal.storage_read = lrv_paths_storage_read;
     hal.storage_write = lrv_paths_storage_write;

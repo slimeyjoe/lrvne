@@ -7,7 +7,7 @@
  * clocks. It is single-threaded: every blocking wait ends in frame_wait(), which is where a
  * backend pumps events and paces time. A backend may use interrupts or threads internally as
  * long as the HAL calls stay callable from that single context. The one sanctioned crossing is
- * audio in pull mode (see the audio section).
+ * audio in pull mode (see struct lrv_audio_source).
  *
  * The HAL is one per process, so its functions take no context argument. Optional members are
  * marked; a backend leaves them NULL (or 0). */
@@ -68,6 +68,27 @@ struct lrv_frame {
  * it has none or the player turned the voice off. */
 enum lrv_pack_id { LRV_PACK_MAIN = 0, LRV_PACK_VOICE = 1, LRV_PACK_COUNT };
 
+/* Where a pulling backend gets its samples (audio_open): mono 16-bit PCM in blocks, asked for
+ * from the backend's audio thread or interrupt whenever the device needs them, the way a
+ * music driver ran from a timer interrupt.
+ *
+ * The locking rule of pull mode: both callbacks take audio_lock themselves for the block (the
+ * mixer of lrvne/mixer.h does). A backend therefore calls them WITHOUT holding the lock, and
+ * the lock need not be recursive. From the main context every call into sound state is
+ * bracketed with audio_lock / audio_unlock, never nested. */
+typedef void lrv_audio_fn(void *ctx, int16_t *pcm, int frames);
+
+struct lrv_audio_source {
+    lrv_audio_fn *render;   /* the next `frames` samples into pcm */
+    /* optional (NULL: use render): the same span of time for a backend that has fallen behind
+     * and drops a block rather than fall further. Time passes exactly as in render (music and
+     * clips are `frames` samples further on) but whatever is expensive to synthesise is not
+     * run; pcm receives what was cheap to have, silence at the least, and the backend may
+     * play or discard it. */
+    lrv_audio_fn *skip;
+    void *ctx;
+};
+
 /* How a backend outputs the auxiliary PCM stream (voice clips). */
 enum lrv_aux_mode {
     LRV_AUX_NONE = 0,       /* no auxiliary stream */
@@ -104,14 +125,13 @@ struct lrv_hal {
     void (*mouse_warp)(int x, int y);
 
     /* audio: mono 16-bit PCM. audio_open returns the rate the backend accepted (it may differ
-     * from the request) or 0 when there is no audio. Two delivery models:
+     * from the request) or 0 when there is no audio; it copies *src. Two delivery models:
      *  push (audio_lock == NULL): the caller renders from its frame and uses audio_space /
-     *    audio_push. The backend must buffer generously.
-     *  pull (audio_lock != NULL): the backend's audio thread or interrupt asks for samples
-     *    whenever the device needs them, through the callback given to audio_open, the way a
-     *    music driver ran from a timer interrupt. Every call into sound state from the main
-     *    context is bracketed with audio_lock/audio_unlock (never nested). */
-    int  (*audio_open)(int rate, void (*render)(void *ctx, int16_t *pcm, int frames), void *ctx);
+     *    audio_push; src is not used. The backend must buffer generously.
+     *  pull (audio_lock != NULL): the backend calls src->render (or src->skip) from its audio
+     *    thread or interrupt, from audio_open's return until audio_close returns, never
+     *    holding the lock (struct lrv_audio_source has the rule). */
+    int  (*audio_open)(int rate, const struct lrv_audio_source *src);
     void (*audio_close)(void);
     int  (*audio_space)(void);                          /* frames the sink can take now */
     void (*audio_push)(const int16_t *pcm, int frames);
@@ -123,9 +143,14 @@ struct lrv_hal {
      * backend mixes and resamples as it likes.
      *   aux_open(rate)  -> the accepted rate (0 = cannot)
      *   aux_space()     -> frames that can be pushed now
-     *   aux_push(p, 0)  -> end of a clip: play out anything held back
+     *   aux_push(p, n)  -> n frames; n = 0 ends a clip: play out anything held back
      *   aux_queued()    -> frames pushed but not yet played (the clip has ended at 0)
-     *   aux_flush()     -> drop everything queued at once (a clip is cut) */
+     *   aux_flush()     -> drop everything queued at once (a clip is cut)
+     *   aux_close()
+     * LRV_AUX_CHANNEL requires aux_open, aux_space, aux_push and aux_queued (lrvne/voice.h
+     * refuses to play without them); aux_close and aux_flush are optional, and without
+     * aux_flush a clip that is cut plays out what is already queued. With LRV_AUX_MIX and
+     * LRV_AUX_NONE all of them stay NULL. */
     int  aux_mode;                                      /* enum lrv_aux_mode */
     int  aux_lead_ms;       /* CHANNEL: how much the backend wants queued ahead, 0 = default */
     int  (*aux_open)(int rate);
@@ -135,7 +160,9 @@ struct lrv_hal {
     int  (*aux_queued)(void);
     void (*aux_flush)(void);
     /* optional: the backend applies a volume (enum lrv_volume, percent 1..100) in its output.
-     * Returns 1 if it does, 0 if the samples are to be scaled before they reach it. */
+     * Returns 1 if it does, 0 if the samples are to be scaled before they reach it. For
+     * LRV_VOL_AUX a backend can only take it on a stream of its own: with LRV_AUX_MIX (and
+     * LRV_AUX_NONE) it returns 0, the clips being scaled before they are mixed. */
     int  (*set_volume)(int which, int percent);
 
     /* storage: small named records (saves, settings). storage_open selects the game's own

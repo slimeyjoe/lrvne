@@ -52,8 +52,7 @@ void lrv_sdl3_mouse_warp(int x, int y);
 
 /* ---- audio.c ------------------------------------------------------------------------------ */
 
-int  lrv_sdl3_audio_open(int rate, void (*render)(void *ctx, int16_t *pcm, int frames),
-                         void *ctx);
+int  lrv_sdl3_audio_open(int rate, const struct lrv_audio_source *src);
 void lrv_sdl3_audio_close(void);
 int  lrv_sdl3_audio_space(void);
 void lrv_sdl3_audio_push(const int16_t *pcm, int frames);

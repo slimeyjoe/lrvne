@@ -3,8 +3,9 @@
  * watchdog.
  *
  * Pull mode (lrvne/hal.h): SDL's audio thread asks for exactly the samples the device needs
- * and the callback given to audio_open renders them, under the lock the engine takes around
- * its own sound calls. The game loop can therefore stall for as long as it likes (decoding a
+ * and the source given to audio_open renders them. The source takes the audio lock itself, the
+ * one the engine takes around its own sound calls, so the thread calls it without. SDL always
+ * gets its samples in time here, so the source's skip is never used. The game loop can therefore stall for as long as it likes (decoding a
  * picture, a window being dragged) without the music stuttering, as a music driver on a timer
  * interrupt never did.
  *
@@ -19,9 +20,8 @@
 static SDL_AudioDeviceID g_dev;
 static SDL_AudioStream *g_main, *g_aux;
 static SDL_Mutex *g_lock;
-static void (*g_render)(void *ctx, int16_t *pcm, int frames);
-static void *g_render_ctx;
-static int16_t g_buf[4096];
+static struct lrv_audio_source g_src;
+static int16_t g_buf[4096];             /* the audio thread's alone */
 static float g_aux_gain = 1.0f;
 static int g_audio_inited;
 
@@ -33,27 +33,24 @@ static void SDLCALL feed(void *userdata, SDL_AudioStream *stream, int additional
     (void)total;
     while (frames > 0) {
         int max = (int)(sizeof g_buf / sizeof g_buf[0]), n = frames > max ? max : frames;
-        SDL_LockMutex(g_lock);
-        g_render(g_render_ctx, g_buf, n);
-        SDL_UnlockMutex(g_lock);
+        g_src.render(g_src.ctx, g_buf, n);
         SDL_PutAudioStreamData(stream, g_buf, n * 2);
         frames -= n;
     }
 }
 
-int lrv_sdl3_audio_open(int rate, void (*render)(void *ctx, int16_t *pcm, int frames), void *ctx)
+int lrv_sdl3_audio_open(int rate, const struct lrv_audio_source *src)
 {
     SDL_AudioSpec spec;
 
-    if (lrv_sdl3.control || rate <= 0 || !render || g_main)
+    if (lrv_sdl3.control || rate <= 0 || !src || !src->render || g_main)
         return 0;
     if (!g_audio_inited && !SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         SDL_Log("audio: %s", SDL_GetError());
         return 0;
     }
     g_audio_inited = 1;
-    g_render = render;
-    g_render_ctx = ctx;
+    g_src = *src;
     g_lock = SDL_CreateMutex();
     spec.format = SDL_AUDIO_S16;
     spec.channels = 1;
