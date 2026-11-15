@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "lrvne/core.h"
+#include "lrvne/gfx.h"
 #include "ptest.h"
-#include "shot.h"
 
 #define NPLANES 4
 #define REF_COLS 80             /* the sequence is written for 80 byte columns x 400 lines */
@@ -129,6 +129,8 @@ static void make_frame(struct lrv_frame *f)
     f->page_switched = g_switched;
     f->scroll_line = g_scroll;
     f->rgb = g_pal;
+    f->colours = g_mode.colours;
+    f->rgb_bits = g_mode.rgb_bits;
     f->display_on = g_on;
 }
 
@@ -155,7 +157,7 @@ static void snap(const char *name)
     make_frame(&f);
     f.dirty = 0;
     f.page_switched = 0;
-    g_io->snap(g_nsnap, name, &f, lrv_shot_hash32(&f, &g_mode));
+    g_io->snap(g_nsnap, name, &f, lrv_frame_hash32(&f));
     g_nsnap++;
 }
 

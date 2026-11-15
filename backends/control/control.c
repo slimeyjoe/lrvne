@@ -228,7 +228,7 @@ void lrv_ctl_video(const struct lrv_video_mode *mode)
 
 void lrv_ctl_present(const struct lrv_frame *frame)
 {
-    lrv_shot_capture(&g_shot, &g_mode, frame);
+    lrv_shot_capture(&g_shot, frame);
 }
 
 /* ---- commands ----------------------------------------------------------------------------- */
@@ -356,7 +356,7 @@ static int do_command(char *line)
         emit_ok();
     } else if (!strcmp(cmd, "snap")) {
         if (g_shot.valid) {
-            lrv_shot_emit_snap(stdout, &g_shot.frame, &g_shot.mode, a1 ? a1 : "snap", g_tick);
+            lrv_shot_emit_snap(stdout, &g_shot.frame, a1 ? a1 : "snap", g_tick);
             emit_ok();
         } else {
             emit_error("no frame was presented yet");
@@ -390,12 +390,12 @@ void lrv_ctl_tick(uint32_t tick)
 
     g_tick = tick;
     if (g_record && g_shot.valid) {
-        uint64_t h = lrv_shot_hash64(&g_shot.frame, &g_shot.mode);
+        uint64_t h = lrv_shot_hash64(&g_shot.frame);
         if (h != g_last_hash) {
             g_last_hash = h;
             printf("{\"ev\":\"frame\",\"t\":%lu,\"hash\":\"%016llx\",", (unsigned long)tick,
                    (unsigned long long)h);
-            lrv_shot_json_body(stdout, &g_shot.frame, &g_shot.mode, g_record >= 2);
+            lrv_shot_json_body(stdout, &g_shot.frame, g_record >= 2);
             putchar('}');
             out_end();
         }

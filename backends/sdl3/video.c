@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "lrvne/core.h"
+#include "lrvne/p2c.h"
 #include "sdl3.h"
 
 static SDL_Window *g_win;
@@ -25,28 +26,12 @@ static SDL_Texture *g_tex;
 static uint32_t *g_rgba;                /* the mode's picture as uploaded, w x h */
 static int g_scale_mode = LRV_SCALE_INTEGER;
 static int g_fullscreen;
+static struct lrv_p2rgba g_p2c;         /* the planar -> chunky table */
 static uint32_t g_lut[16];              /* colour index -> ABGR */
 static uint8_t g_last_rgb[16 * 3];
 static int g_last_on = -1, g_last_scroll = -1;
 static int g_tex_valid;                 /* the texture holds the last presented page */
 static int g_redraw = 1;                /* present again without new content */
-
-/* TODO(merge): the planar -> chunky conversion table and loop are being moved to src/gfx;
- * replace conv_init and the inner loop of convert with that module's. */
-static uint64_t g_bits[4][256];         /* plane k byte -> bit k in each of the 8 pixel lanes */
-
-static void conv_init(void)
-{
-    int k, b, i;
-    for (k = 0; k < 4; k++)
-        for (b = 0; b < 256; b++) {
-            uint64_t v = 0;
-            for (i = 0; i < 8; i++)     /* lane i = pixel i from the left (MSB first) */
-                if (b & (0x80 >> i))
-                    v |= (uint64_t)(1u << k) << (8 * i);
-            g_bits[k][b] = v;
-        }
-}
 
 SDL_Window *lrv_sdl3_window(void)
 {
@@ -101,7 +86,7 @@ int lrv_sdl3_video_open(const struct lrv_video_cfg *cfg)
         return LRV_ERR_NOMEM;
     }
     SDL_SetRenderVSync(g_ren, lrv_sdl3.vsync ? 1 : 0);
-    conv_init();
+    lrv_p2rgba_init(&g_p2c);
     if (!lrv_sdl3.control && !lrv_sdl3.app->host_pointer)
         SDL_HideCursor();               /* the engine draws its machine's pointer itself */
     lrv_sdl3.mode = *m;
@@ -203,48 +188,22 @@ static void draw(SDL_FRect *d)
 /* converts display lines [y0,y1) x byte columns [x0,x1) into g_rgba and uploads them */
 static void convert(const struct lrv_surface *pg, int scroll, int x0, int y0, int x1, int y1)
 {
+    uint32_t *dst = g_rgba + (size_t)y0 * (size_t)pg->w + (size_t)x0 * 8;
     SDL_Rect r;
-    int y, x, w = pg->w;
 
-    for (y = y0; y < y1; y++) {
-        size_t line = (size_t)((y + scroll) % pg->h) * (size_t)pg->stride;
-        const uint8_t *p0 = pg->plane[0] + line, *p1 = pg->plane[1] + line;
-        const uint8_t *p2 = pg->plane[2] + line, *p3 = pg->plane[3] + line;
-        uint32_t *dst = g_rgba + (size_t)y * (size_t)w + (size_t)x0 * 8;
-        for (x = x0; x < x1; x++, dst += 8) {
-            uint64_t v = g_bits[0][p0[x]] | g_bits[1][p1[x]] | g_bits[2][p2[x]] | g_bits[3][p3[x]];
-            dst[0] = g_lut[v & 15];
-            dst[1] = g_lut[(v >> 8) & 15];
-            dst[2] = g_lut[(v >> 16) & 15];
-            dst[3] = g_lut[(v >> 24) & 15];
-            dst[4] = g_lut[(v >> 32) & 15];
-            dst[5] = g_lut[(v >> 40) & 15];
-            dst[6] = g_lut[(v >> 48) & 15];
-            dst[7] = g_lut[(v >> 56) & 15];
-        }
-    }
+    lrv_p2rgba(&g_p2c, pg, x0, y0, x1, y1, scroll, g_lut, dst, (size_t)pg->w);
     r.x = x0 * 8;
     r.y = y0;
     r.w = (x1 - x0) * 8;
     r.h = y1 - y0;
-    SDL_UpdateTexture(g_tex, &r, g_rgba + (size_t)y0 * (size_t)w + (size_t)x0 * 8, w * 4);
+    SDL_UpdateTexture(g_tex, &r, dst, pg->w * 4);
 }
 
 static void set_palette(const struct lrv_frame *f)
 {
     const struct lrv_video_mode *m = &lrv_sdl3.mode;
-    uint32_t max = (1u << m->rgb_bits) - 1u;
-    int i;
 
-    for (i = 0; i < 16; i++) {
-        uint32_t r = 0, g = 0, b = 0;
-        if (f->display_on && i < m->colours) {
-            r = f->rgb[i * 3] * 255u / max;
-            g = f->rgb[i * 3 + 1] * 255u / max;
-            b = f->rgb[i * 3 + 2] * 255u / max;
-        }
-        g_lut[i] = 0xFF000000u | (b << 16) | (g << 8) | r;
-    }
+    lrv_rgba_palette(g_lut, f->rgb, m->colours, m->rgb_bits, f->display_on);
     memcpy(g_last_rgb, f->rgb, (size_t)m->colours * 3);
 }
 

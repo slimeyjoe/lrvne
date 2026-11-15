@@ -37,7 +37,7 @@ int lrv_screen_init(struct lrv_screen *scr, const struct lrv_hal *hal,
     scr->hal = hal;
     scr->mode = *mode;
     scr->mem_size = set * (size_t)(npages + nbuffers);
-    scr->mem = hal->mem_alloc(scr->mem_size, mem_flags);
+    scr->mem = lrv_alloc_flags(hal, scr->mem_size, mem_flags);
     if (!scr->mem) {
         scr->mem_size = 0;
         return LRV_ERR_NOMEM;
@@ -56,7 +56,7 @@ int lrv_screen_init(struct lrv_screen *scr, const struct lrv_hal *hal,
 void lrv_screen_free(struct lrv_screen *scr)
 {
     if (scr->mem)
-        scr->hal->mem_free(scr->mem, scr->mem_size);
+        lrv_free(scr->hal, scr->mem, scr->mem_size);
     memset(scr, 0, sizeof *scr);
 }
 
@@ -232,6 +232,8 @@ void lrv_screen_present(struct lrv_screen *scr)
     f.page_switched = scr->page_switched;
     f.scroll_line = scr->scroll_line;
     f.rgb = scr->rgb;
+    f.colours = scr->mode.colours;
+    f.rgb_bits = scr->mode.rgb_bits;
     f.display_on = scr->display_on;
     scr->hal->video_present(&f);
     lrv_rect_clear(d);

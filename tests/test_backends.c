@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include "test_hal.h"
 #include "lrvne/app.h"
+#include "lrvne/gfx.h"
 #include "args.h"
 #include "autoplay.h"
 #include "jsonout.h"
@@ -381,7 +382,8 @@ static void pt_present(const struct lrv_frame *f)
 static void pt_snap(int index, const char *name, const struct lrv_frame *f, uint32_t hash)
 {
     CHECK(index == pt_snaps && name && *name);
-    CHECK(hash == lrv_shot_hash32(f, &pt_mode));
+    CHECK(hash == lrv_frame_hash32(f));
+    CHECK(f->colours == pt_mode.colours && f->rgb_bits == pt_mode.rgb_bits);
     if (pt_snaps++ == 0)
         pt_first = hash;
     pt_last = hash;
@@ -415,7 +417,6 @@ static void test_ptest(void)
 
 static void test_shot(void)
 {
-    static const struct lrv_video_mode mode = { LRV_FMT_PLANAR4, 16, 2, 4, 3, 1, 16, 4 };
     uint8_t planes[4][4] = {
         { 0x80, 0x00, 0x00, 0x01 }, { 0x80, 0x00, 0x00, 0x00 },
         { 0x00, 0x00, 0x00, 0x01 }, { 0x00, 0x00, 0x00, 0x01 }
@@ -438,6 +439,8 @@ static void test_shot(void)
     memset(&f, 0, sizeof f);
     f.page = &page;
     f.rgb = pal;
+    f.colours = 16;
+    f.rgb_bits = 4;
     f.display_on = 1;
 
     /* pixel (0,0) is colour 3, pixel (15,1) colour 13; two pixels a byte */
@@ -449,29 +452,29 @@ static void test_shot(void)
     CHECK(idx[7] == 0x0D && idx[8] == 0x30);
 
     /* the hash sees the picture, the scroll line, the palette and the display switch */
-    h0 = lrv_shot_hash32(&f, &mode);
+    h0 = lrv_frame_hash32(&f);
     f.scroll_line = 0;
-    CHECK(lrv_shot_hash32(&f, &mode) != h0);
+    CHECK(lrv_frame_hash32(&f) != h0);
     f.scroll_line = 1;
     pal[47] ^= 1;
-    CHECK(lrv_shot_hash32(&f, &mode) != h0);
+    CHECK(lrv_frame_hash32(&f) != h0);
     pal[47] ^= 1;
     f.display_on = 0;
-    CHECK(lrv_shot_hash32(&f, &mode) != h0);
+    CHECK(lrv_frame_hash32(&f) != h0);
     f.display_on = 1;
-    CHECK(lrv_shot_hash32(&f, &mode) == h0);
+    CHECK(lrv_frame_hash32(&f) == h0);
 
     /* a copy outlives the page it was taken from */
     memset(&shot, 0, sizeof shot);
-    CHECK(lrv_shot_capture(&shot, &mode, &f) == LRV_OK && shot.valid);
+    CHECK(lrv_shot_capture(&shot, &f) == LRV_OK && shot.valid);
     memset(planes, 0, sizeof planes);
-    CHECK(lrv_shot_hash32(&shot.frame, &shot.mode) == h0);
-    CHECK(lrv_shot_hash64(&shot.frame, &shot.mode) != lrv_shot_hash64(&f, &mode));
+    CHECK(lrv_frame_hash32(&shot.frame) == h0);
+    CHECK(lrv_shot_hash64(&shot.frame) != lrv_shot_hash64(&f));
 
     out = tmpfile();
     CHECK(out != 0);
     if (out) {
-        lrv_shot_emit_snap(out, &shot.frame, &shot.mode, "a \"name\"", 7);
+        lrv_shot_emit_snap(out, &shot.frame, "a \"name\"", 7);
         lrv_json_b64(out, (const uint8_t *)"ab", 2);
         lrv_json_b64(out, (const uint8_t *)"a", 1);
         rewind(out);
@@ -486,7 +489,7 @@ static void test_shot(void)
     }
     lrv_shot_free(&shot);
     page.format = LRV_FMT_INDEXED8;
-    CHECK(lrv_shot_capture(&shot, &mode, &f) == LRV_ERR_RANGE);
+    CHECK(lrv_shot_capture(&shot, &f) == LRV_ERR_RANGE);
 }
 
 /* ---- WAV ---------------------------------------------------------------------------------- */

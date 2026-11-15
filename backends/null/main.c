@@ -90,7 +90,7 @@ static void pt_present(const struct lrv_frame *frame)
 static void pt_snap(int index, const char *name, const struct lrv_frame *frame, uint32_t hash)
 {
     (void)hash;
-    lrv_shot_emit_snap(stdout, frame, &g_mode, name, (uint32_t)index);
+    lrv_shot_emit_snap(stdout, frame, name, (uint32_t)index);
 }
 
 static int v_open(const struct lrv_video_cfg *cfg)
@@ -118,11 +118,11 @@ static void v_present(const struct lrv_frame *frame)
     if (g_control)
         lrv_ctl_present(frame);
     else if (g_ap.snap_count)
-        lrv_shot_capture(&g_snap, &g_mode, frame);
+        lrv_shot_capture(&g_snap, frame);
     if (g_shot_every && g_tick % (uint32_t)g_shot_every == 0) {
         char path[LRV_PATH_MAX];
         snprintf(path, sizeof path, "%s/shot_%08lu.ppm", g_shot_dir, (unsigned long)g_tick);
-        lrv_shot_write_ppm(path, frame, &g_mode);
+        lrv_shot_write_ppm(path, frame);
     }
 }
 
@@ -254,7 +254,7 @@ static void t_frame_wait(void)
     } else if (g_snap.valid && lrv_autoplay_snap_due(&g_ap, g_tick)) {
         char name[24];
         snprintf(name, sizeof name, "t%lu", (unsigned long)g_tick);
-        lrv_shot_emit_snap(stdout, &g_snap.frame, &g_snap.mode, name, g_tick);
+        lrv_shot_emit_snap(stdout, &g_snap.frame, name, g_tick);
     }
 }
 

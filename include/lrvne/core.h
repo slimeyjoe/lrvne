@@ -53,9 +53,11 @@ void lrv_fatal(const struct lrv_hal *hal, const char *fmt, ...) LRV_PRINTF(2, 3)
 
 /* Zeroed memory from the HAL; NULL when there is none. */
 void *lrv_alloc(const struct lrv_hal *hal, size_t n);
-/* The same, but running out of memory is fatal: never returns NULL. */
+/* The same from memory of a kind (LRV_MEM_* of lrvne/hal.h; lrv_alloc is LRV_MEM_ANY). */
+void *lrv_alloc_flags(const struct lrv_hal *hal, size_t n, unsigned flags);
+/* As lrv_alloc, but running out of memory is fatal: never returns NULL. */
 void *lrv_xalloc(const struct lrv_hal *hal, size_t n);
-/* Releases what lrv_alloc/lrv_xalloc returned for the same n; p may be NULL. */
+/* Releases what one of the above returned for the same n; p may be NULL. */
 void lrv_free(const struct lrv_hal *hal, void *p, size_t n);
 
 /* Compares two names without regard to ASCII case. Returns 1 when equal. */

@@ -48,14 +48,17 @@ struct lrv_video_cfg {
     uint32_t host_mode;         /* a backend's own display mode id, 0 = its default */
 };
 
-/* One presentation. */
+/* One presentation. A frame describes itself: what it shows can be converted, hashed or saved
+ * without the video mode at hand (the page has its own format and size, the palette its own). */
 struct lrv_frame {
     const struct lrv_surface *page; /* the displayed page */
     const struct lrv_rect *dirty;   /* what changed since the previous present; NULL = all */
     int page_switched;              /* a different page is displayed now: upload everything */
     int scroll_line;                /* the page line shown at the top (hardware scroll) */
-    const uint8_t *rgb;             /* palette: mode.colours x {R,G,B}, 0 .. 2^rgb_bits - 1,
-                                     * as the DAC outputs them */
+    const uint8_t *rgb;             /* palette: colours x {R,G,B}, 0 .. 2^rgb_bits - 1, as the
+                                     * DAC outputs them */
+    int colours;                    /* palette entries: the video mode's */
+    int rgb_bits;                   /* bits per gun: the video mode's */
     int display_on;                 /* 0: the display shows black */
 };
 

@@ -42,7 +42,7 @@ void lrv_pal_brightness(uint8_t *out, const uint8_t *in, size_t n, int level, in
         out[i] = (uint8_t)lrv_pal_bright(in[i], level, max);
 }
 
-uint32_t lrv_frame_hash32(const struct lrv_frame *frame, int colours)
+uint32_t lrv_frame_hash32(const struct lrv_frame *frame)
 {
     const struct lrv_surface *s = frame->page;
     int planes = lrv_format_planes(s->format);
@@ -60,7 +60,7 @@ uint32_t lrv_frame_hash32(const struct lrv_frame *frame, int colours)
                 h = (h ^ row[x]) * 16777619u;
         }
     }
-    for (x = 0; x < colours * 3; x++)
+    for (x = 0; x < frame->colours * 3; x++)
         h = (h ^ frame->rgb[x]) * 16777619u;
     h = (h ^ (uint32_t)(frame->display_on ? 1 : 0)) * 16777619u;
     return h;

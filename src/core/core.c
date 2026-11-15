@@ -41,12 +41,17 @@ void lrv_fatal(const struct lrv_hal *hal, const char *fmt, ...)
         ;
 }
 
-void *lrv_alloc(const struct lrv_hal *hal, size_t n)
+void *lrv_alloc_flags(const struct lrv_hal *hal, size_t n, unsigned flags)
 {
-    void *p = hal->mem_alloc(n ? n : 1, LRV_MEM_ANY);
+    void *p = hal->mem_alloc(n ? n : 1, flags);
     if (p)
         memset(p, 0, n);
     return p;
+}
+
+void *lrv_alloc(const struct lrv_hal *hal, size_t n)
+{
+    return lrv_alloc_flags(hal, n, LRV_MEM_ANY);
 }
 
 void *lrv_xalloc(const struct lrv_hal *hal, size_t n)

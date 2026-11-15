@@ -64,8 +64,8 @@ struct lrv_screen {
 /* ---- life cycle ------------------------------------------------------------------------- */
 
 /* Allocates npages pages and nbuffers buffers of the mode's format and size in one block of
- * hal->mem_alloc(size, mem_flags) (LRV_MEM_*: a backend that shows the pages where they are
- * needs them in memory its display hardware reaches), page 0 first, plane after plane, then
+ * lrv_alloc_flags(hal, size, mem_flags) (LRV_MEM_*: a backend that shows the pages where they
+ * are needs them in memory its display hardware reaches), page 0 first, plane after plane, then
  * the next page, then the buffers. The state is that of lrv_screen_reset. Returns LRV_OK,
  * LRV_ERR_RANGE for counts or a format that cannot be had, LRV_ERR_NOMEM. */
 int  lrv_screen_init(struct lrv_screen *scr, const struct lrv_hal *hal,
@@ -156,8 +156,8 @@ void lrv_pal_brightness(uint8_t *out, const uint8_t *in, size_t n, int level, in
 /* ---- frame hash ------------------------------------------------------------------------- */
 
 /* FNV-1a (32 bit) over what a frame shows: the displayed image line by line from the scroll
- * line, in every line plane after plane; then the `colours` palette entries; then the display
- * flag as one byte. Two frames with the same hash show the same picture. */
-uint32_t lrv_frame_hash32(const struct lrv_frame *frame, int colours);
+ * line, in every line plane after plane; then the frame's palette entries; then the display
+ * flag as one byte. Two frames with the same hash show the same picture, on any backend. */
+uint32_t lrv_frame_hash32(const struct lrv_frame *frame);
 
 #endif

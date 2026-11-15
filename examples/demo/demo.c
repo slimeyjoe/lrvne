@@ -133,6 +133,8 @@ static void demo_present(void *ctx)
     frame.page = &d->page;
     frame.dirty = &d->dirty;
     frame.rgb = d->palette;
+    frame.colours = demo_mode.colours;
+    frame.rgb_bits = demo_mode.rgb_bits;
     frame.display_on = 1;
     d->hal->video_present(&frame);
     lrv_rect_clear(&d->dirty);

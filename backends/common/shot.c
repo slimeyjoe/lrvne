@@ -3,16 +3,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include "lrvne/core.h"
+#include "lrvne/gfx.h"
 #include "jsonout.h"
 #include "shot.h"
 
 #define NPLANES 4               /* LRV_FMT_PLANAR4 */
 
-static int supported(const struct lrv_frame *f, const struct lrv_video_mode *mode)
+static int supported(const struct lrv_frame *f)
 {
     const struct lrv_surface *pg = f->page;
     return pg && pg->format == LRV_FMT_PLANAR4 && pg->w > 0 && pg->h > 0 &&
-           pg->stride >= (pg->w + 7) / 8 && mode->colours > 0 && mode->colours <= 256;
+           pg->stride >= (pg->w + 7) / 8 && f->colours > 0 && f->colours <= LRV_PALETTE_MAX;
 }
 
 /* the page line shown at display line y */
@@ -22,16 +23,15 @@ static int source_line(const struct lrv_frame *f, int y)
     return sy < 0 ? sy + h : sy;
 }
 
-int lrv_shot_capture(struct lrv_shot *s, const struct lrv_video_mode *mode,
-                     const struct lrv_frame *f)
+int lrv_shot_capture(struct lrv_shot *s, const struct lrv_frame *f)
 {
     size_t plane, pal, need;
     int p;
 
-    if (!supported(f, mode))
+    if (!supported(f))
         return LRV_ERR_RANGE;
     plane = (size_t)lrv_surface_plane_bytes(f->page);
-    pal = (size_t)mode->colours * 3;
+    pal = (size_t)f->colours * 3;
     need = NPLANES * plane + pal;
     if (need != s->size) {
         uint8_t *mem = realloc(s->mem, need);
@@ -40,7 +40,6 @@ int lrv_shot_capture(struct lrv_shot *s, const struct lrv_video_mode *mode,
         s->mem = mem;
         s->size = need;
     }
-    s->mode = *mode;
     s->page = *f->page;
     for (p = 0; p < NPLANES; p++) {
         s->page.plane[p] = s->mem + (size_t)p * plane;
@@ -51,6 +50,8 @@ int lrv_shot_capture(struct lrv_shot *s, const struct lrv_video_mode *mode,
     s->frame.page = &s->page;
     s->frame.scroll_line = f->scroll_line;
     s->frame.rgb = s->mem + NPLANES * plane;
+    s->frame.colours = f->colours;
+    s->frame.rgb_bits = f->rgb_bits;
     s->frame.display_on = f->display_on;
     s->valid = 1;
     return LRV_OK;
@@ -62,34 +63,11 @@ void lrv_shot_free(struct lrv_shot *s)
     memset(s, 0, sizeof *s);
 }
 
-/* TODO(merge): a duplicate of the frame hash that is being added to src/gfx; replace this
- * function's body with a call to it. The values must stay the same: they are compared with
- * the snapshots other backends print. */
-uint32_t lrv_shot_hash32(const struct lrv_frame *f, const struct lrv_video_mode *mode)
-{
-    const struct lrv_surface *pg = f->page;
-    uint32_t h = 2166136261u;
-    int p, y, x, npal = mode->colours * 3;
-
-    for (y = 0; y < pg->h; y++) {
-        int sy = source_line(f, y);
-        for (p = 0; p < NPLANES; p++) {
-            const uint8_t *row = pg->plane[p] + (size_t)sy * (size_t)pg->stride;
-            for (x = 0; x < pg->stride; x++)
-                h = (h ^ row[x]) * 16777619u;
-        }
-    }
-    for (x = 0; x < npal; x++)
-        h = (h ^ f->rgb[x]) * 16777619u;
-    h = (h ^ (uint32_t)(f->display_on ? 1 : 0)) * 16777619u;
-    return h;
-}
-
-uint64_t lrv_shot_hash64(const struct lrv_frame *f, const struct lrv_video_mode *mode)
+uint64_t lrv_shot_hash64(const struct lrv_frame *f)
 {
     const struct lrv_surface *pg = f->page;
     uint64_t h = 1469598103934665603ull;
-    size_t i, plane = (size_t)lrv_surface_plane_bytes(pg), npal = (size_t)mode->colours * 3;
+    size_t i, plane = (size_t)lrv_surface_plane_bytes(pg), npal = (size_t)f->colours * 3;
     int p;
 
     for (p = 0; p < NPLANES; p++)
@@ -131,11 +109,10 @@ void lrv_shot_indices(const struct lrv_frame *f, uint8_t *out)
     }
 }
 
-void lrv_shot_json_body(FILE *out, const struct lrv_frame *f, const struct lrv_video_mode *mode,
-                        int with_data)
+void lrv_shot_json_body(FILE *out, const struct lrv_frame *f, int with_data)
 {
     fprintf(out, "\"pal\":");
-    lrv_json_hex(out, f->rgb, (size_t)mode->colours * 3);
+    lrv_json_hex(out, f->rgb, (size_t)f->colours * 3);
     fprintf(out, ",\"gon\":%d,\"scroll\":%d", f->display_on ? 1 : 0, f->scroll_line);
     if (with_data) {
         size_t n = lrv_shot_indices_size(f);
@@ -151,27 +128,25 @@ void lrv_shot_json_body(FILE *out, const struct lrv_frame *f, const struct lrv_v
     }
 }
 
-void lrv_shot_emit_snap(FILE *out, const struct lrv_frame *f, const struct lrv_video_mode *mode,
-                        const char *name, uint32_t tick)
+void lrv_shot_emit_snap(FILE *out, const struct lrv_frame *f, const char *name, uint32_t tick)
 {
     fprintf(out, "{\"ev\":\"snap\",\"name\":");
     lrv_json_str(out, name);
     fprintf(out, ",\"t\":%lu,\"hash\":\"%08lx\",\"size\":[%d,%d],", (unsigned long)tick,
-            (unsigned long)lrv_shot_hash32(f, mode), f->page->w, f->page->h);
-    lrv_shot_json_body(out, f, mode, 1);
+            (unsigned long)lrv_frame_hash32(f), f->page->w, f->page->h);
+    lrv_shot_json_body(out, f, 1);
     fprintf(out, "}\n");
     fflush(out);
 }
 
-int lrv_shot_write_ppm(const char *path, const struct lrv_frame *f,
-                       const struct lrv_video_mode *mode)
+int lrv_shot_write_ppm(const char *path, const struct lrv_frame *f)
 {
     const struct lrv_surface *pg = f->page;
-    unsigned max = mode->rgb_bits > 0 && mode->rgb_bits < 8 ? (1u << mode->rgb_bits) - 1u : 255u;
+    unsigned max = f->rgb_bits > 0 && f->rgb_bits < 8 ? (1u << f->rgb_bits) - 1u : 255u;
     FILE *out;
     int y, x, i, rc;
 
-    if (!supported(f, mode))
+    if (!supported(f))
         return LRV_ERR_RANGE;
     out = fopen(path, "wb");
     if (!out)
@@ -187,7 +162,7 @@ int lrv_shot_write_ppm(const char *path, const struct lrv_frame *f,
                            (((pg->plane[2][off] >> bit) & 1u) << 2) |
                            (((pg->plane[3][off] >> bit) & 1u) << 3);
             uint8_t px[3] = { 0, 0, 0 };
-            if (f->display_on && (int)idx < mode->colours)
+            if (f->display_on && (int)idx < f->colours)
                 for (i = 0; i < 3; i++)
                     px[i] = (uint8_t)(f->rgb[idx * 3 + (unsigned)i] * 255u / max);
             fwrite(px, 1, 3, out);

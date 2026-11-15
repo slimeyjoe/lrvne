@@ -14,7 +14,8 @@
  * uploaded because of page_switched; a scroll change is not reported as dirty.
  *
  * The sequence is laid out on a 640x400 picture and scaled to the video mode. Everything is
- * deterministic and the same C everywhere, so the hash of each snapshot (shot.h) proves that
+ * deterministic and the same C everywhere, so the hash of each snapshot (lrv_frame_hash32 of
+ * lrvne/gfx.h) proves that
  * the sequence ran identically on another machine, and a backend with a real display can be
  * checked against the snapshots the headless backend prints. */
 #ifndef LRVNE_BACKENDS_PTEST_H
@@ -25,7 +26,8 @@
 
 struct lrv_ptest_io {
     void (*present)(const struct lrv_frame *frame);
-    /* the screen must now show `frame` (black when its display is off) */
+    /* the screen must now show `frame` (black when its display is off); hash is its
+     * lrv_frame_hash32 */
     void (*snap)(int index, const char *name, const struct lrv_frame *frame, uint32_t hash);
 };
 

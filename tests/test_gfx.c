@@ -185,6 +185,7 @@ static void test_screen(void)
     lrv_screen_present(&scr);
     CHECK(g_presents == 1 && g_frame.page == &scr.page[0] && g_frame.page_switched == 1);
     CHECK(g_frame.scroll_line == 7 && g_frame.rgb == scr.rgb && g_frame.display_on == 1);
+    CHECK(g_frame.colours == 16 && g_frame.rgb_bits == 4);      /* the frame describes itself */
     CHECK(g_frame_dirty.x0 == 2 && g_frame_dirty.y0 == 3 && g_frame_dirty.x1 == 4 &&
           g_frame_dirty.y1 == 5);
     CHECK(lrv_rect_empty(&scr.dirty[0]) && scr.page_switched == 0);
@@ -328,12 +329,14 @@ static void test_hash(struct lrv_surface *page)
     memset(&f, 0, sizeof f);
     f.page = page;
     f.rgb = rgb;
+    f.colours = 16;
+    f.rgb_bits = 4;
     f.display_on = 1;
     for (i = 0; i < 20; i++) {
         f.scroll_line = i == 0 ? 0 : i == 1 ? 399 : (int)(rnd() % 400);
         f.display_on = i & 1;
         fill_random(page);
-        CHECK(lrv_frame_hash32(&f, 16) ==
+        CHECK(lrv_frame_hash32(&f) ==
               old_hash(page->plane, f.scroll_line, rgb, f.display_on));
     }
     /* a known value: the empty screen, black palette, display on */
@@ -342,26 +345,26 @@ static void test_hash(struct lrv_surface *page)
     memset(rgb, 0, sizeof rgb);
     f.scroll_line = 0;
     f.display_on = 1;
-    h0 = lrv_frame_hash32(&f, 16);
+    h0 = lrv_frame_hash32(&f);
     CHECK(h0 == old_hash(page->plane, 0, rgb, 1));
     /* it depends on every part: a pixel, the scroll, a colour, the flag; not on what a
      * backend does not show (the dirty rectangle, the switch flag) */
     page->plane[2][PLANE - 1] ^= 1;
-    CHECK(lrv_frame_hash32(&f, 16) != h0);
+    CHECK(lrv_frame_hash32(&f) != h0);
     f.scroll_line = 1;
-    CHECK(lrv_frame_hash32(&f, 16) != old_hash(page->plane, 0, rgb, 1));
+    CHECK(lrv_frame_hash32(&f) != old_hash(page->plane, 0, rgb, 1));
     f.scroll_line = 400;                                        /* a whole turn */
-    CHECK(lrv_frame_hash32(&f, 16) == old_hash(page->plane, 0, rgb, 1));
+    CHECK(lrv_frame_hash32(&f) == old_hash(page->plane, 0, rgb, 1));
     f.scroll_line = 0;
     page->plane[2][PLANE - 1] ^= 1;
     rgb[47] = 1;
-    CHECK(lrv_frame_hash32(&f, 16) != h0);
+    CHECK(lrv_frame_hash32(&f) != h0);
     rgb[47] = 0;
     f.display_on = 0;
-    CHECK(lrv_frame_hash32(&f, 16) != h0);
+    CHECK(lrv_frame_hash32(&f) != h0);
     f.display_on = 2;                                           /* any nonzero is "on" */
     f.page_switched = 1;
-    CHECK(lrv_frame_hash32(&f, 16) == h0);
+    CHECK(lrv_frame_hash32(&f) == h0);
 }
 
 /* ---- planar to chunky -------------------------------------------------------------------- */
