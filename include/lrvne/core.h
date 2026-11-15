@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* lrvne, the Lightweight Retro Visual Novel Engine - common definitions: version, error codes and the helpers every module uses on top of
- * the HAL (formatted logging, checked allocation).
+/* lrvne, the Lightweight Retro Visual Novel Engine - common definitions: version, error codes
+ * and the helpers every module uses on top of the HAL (formatted logging, checked allocation).
  *
  * Conventions of the whole library:
  *   - Functions that can fail return 0 (LRV_OK) or a negative enum lrv_err; functions that
