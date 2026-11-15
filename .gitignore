@@ -1,0 +1,6 @@
+build/
+__pycache__/
+*.pyc
+.claude/
+# machine-specific test rig settings (emulators, toolchains)
+tests/rig.conf
