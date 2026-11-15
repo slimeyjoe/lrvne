@@ -113,4 +113,7 @@ tune` renders the demo's music offline.
 ## Licence
 
 GPL-3.0-or-later (`LICENSE`). Third-party code under `third_party/` and the
-fonts under `fonts/` keep their own licences, stated next to them.
+fonts under `fonts/` keep their own licences, stated next to them. A few
+source files carry a different or additional licence in their SPDX header and
+keep it: `src/snd/opn_lite_68k.s` is BSD-2-Clause, `src/snd/opn_lite.c` is
+GPL-3.0-or-later AND BSD-3-Clause.
