@@ -10,6 +10,9 @@
 # the pack, the control protocol, the tick limit, sound (offline, pushed and pulled), the
 # command line's errors.
 set -eu
+# bytes, not characters: BSD tr refuses binary input under a UTF-8 locale
+LC_ALL=C
+export LC_ALL
 
 exe=${1:?usage: smoke.sh PATH-TO-lrvdemo}
 case "$exe" in /*) ;; *) exe=$PWD/$exe ;; esac
