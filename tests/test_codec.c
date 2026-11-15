@@ -21,14 +21,16 @@ static void test_lzss(void)
                                          * wraps to 0, the last byte read is the first written */
         0x01, 'Z'                       /* a literal; the match the flags promise is not there */
     };
+    /* 36 bytes of output; the literal's own terminating NUL is a 37th and no part of it */
     static const uint8_t want[] = "abcdabcddddddd\0\0\0abcdabcddddddd\0\0\0aZ";
+    enum { WANT = sizeof want - 1 };
     static uint8_t ring[LRV_LZSS_RING];
     uint8_t out[64];
     size_t n;
 
     memset(out, 0xEE, sizeof out);
     n = lrv_lzss_decode(stream, sizeof stream, out, sizeof out, ring);
-    CHECK(n == 36 && !memcmp(out, want, 36) && out[36] == 0xEE);
+    CHECK(WANT == 36 && n == WANT && !memcmp(out, want, WANT) && out[WANT] == 0xEE);
 
     /* a full buffer: the rest is dropped, nothing is written past it */
     memset(out, 0xEE, sizeof out);

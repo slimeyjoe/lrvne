@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Host build: the native compiler and the null backend. For tests and tools.
-#   SAN=1 turns the sanitizers on.
+#   SAN=1 turns the sanitizers on; the objects then go to $(BUILD)-san.
 CC      ?= cc
 CXX     ?= c++
 EXESUF  :=
@@ -12,6 +12,7 @@ LRVNE_WARN := -Wall -Wextra -Wpedantic -Wshadow -Wstrict-prototypes -Wmissing-pr
 OPT     ?= -O2 -g
 ifeq ($(SAN),1)
 OPT     := -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+LRVNE_BUILD_SUFFIX := -san
 endif
 
 CFLAGS  := $(LRVNE_CSTD) $(LRVNE_WARN) $(OPT) -D_POSIX_C_SOURCE=200809L -DLRV_TARGET_HOST

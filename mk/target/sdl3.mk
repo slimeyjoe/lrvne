@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SDL3 build: Linux, macOS and whatever else SDL3 runs on.
+# SDL3 build: Linux, macOS and whatever else SDL3 runs on. SDL3 is found with pkg-config.
+#   SAN=1 turns the sanitizers on; the objects then go to $(BUILD)-san.
 CC      ?= cc
 CXX     ?= c++
 EXESUF  :=
@@ -7,14 +8,18 @@ LRVNE_BACKEND_DIRS := $(LRVNE)/backends/sdl3
 # release archives: <name>-<version>-sdl3-<os>-<arch>
 LRVNE_DIST_NAME := sdl3-$(shell uname -s | tr A-Z a-z)-$(shell uname -m)
 
-LRVNE_SDL_CFLAGS := $(shell pkg-config --cflags sdl3)
-LRVNE_SDL_LIBS   := $(shell pkg-config --libs sdl3)
+LRVNE_SDL_CFLAGS := $(shell pkg-config --cflags sdl3 2>/dev/null)
+LRVNE_SDL_LIBS   := $(shell pkg-config --libs sdl3 2>/dev/null)
+ifeq ($(strip $(LRVNE_SDL_LIBS))$(filter clean,$(MAKECMDGOALS)),)
+$(error TARGET=sdl3 needs SDL3: `pkg-config --libs sdl3` found nothing)
+endif
 
 LRVNE_CSTD := -std=c99
 LRVNE_WARN := -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wvla
 OPT     ?= -O2 -g
 ifeq ($(SAN),1)
 OPT     := -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+LRVNE_BUILD_SUFFIX := -san
 endif
 
 CFLAGS  := $(LRVNE_CSTD) $(LRVNE_WARN) $(OPT) $(LRVNE_SDL_CFLAGS) -D_DEFAULT_SOURCE -DLRV_TARGET_SDL3
