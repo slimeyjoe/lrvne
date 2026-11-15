@@ -8,6 +8,8 @@
 #                                   (tests/smoke.sh; host target). SAN=1: with the sanitizers,
 #                                   in a build directory of its own (build/<target>-san)
 #   make check                      test + the tools' tests + the leak check
+#   make opn68k                     the 68k assembly FM loop against its C reference on an
+#                                   emulated 68040 (tests/opn68k.sh says what it needs)
 #   make clean
 #
 # Switches (0/1, see mk/lrvne.mk): LRVNE_YMFM, LRVNE_OPUS, LRVNE_CONTROL. Changing one rebuilds
@@ -25,7 +27,7 @@ APP_INCLUDES := -Iexamples/demo
 .DEFAULT_GOAL := all
 include mk/lrvne.mk
 
-.PHONY: all test check clean
+.PHONY: all test check opn68k clean
 all: $(EXE)
 
 # ---- unit tests: each tests/test_*.c is a program linked with the library and with what the
@@ -53,6 +55,10 @@ check: test
 	$(Q)if [ -d tools/tests ]; then python3 -I -m unittest discover -s tools/tests -t tools; \
 	    else echo "check: no tools/tests, skipping the tools' tests"; fi
 	$(Q)scripts/check-leaks.sh tree
+
+# cross tools only: the same whatever TARGET is
+opn68k:
+	$(Q)tests/opn68k.sh build/opn68k
 
 clean:
 	rm -rf build
