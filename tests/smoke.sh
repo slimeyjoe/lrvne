@@ -26,6 +26,14 @@ hash_of() {
     sed -n "s/.*\"ev\":\"snap\",\"name\":\"$2\".*\"hash\":\"\\([0-9a-f]*\\)\".*/\\1/p" "$1"
 }
 
+# bytes_of FILE: its bytes as decimal numbers, one space apart (od's spacing differs between
+# GNU and BSD; the shell's word splitting evens it out)
+bytes_of() {
+    # shellcheck disable=SC2046
+    set -- $(od -An -tu1 "$1")
+    echo "$*"
+}
+
 # ---- the presentation test: 25 snapshots with the hashes every backend must reproduce -------
 "$exe" --present-test >"$tmp/ptest" || fail "--present-test exited with $?"
 [ "$(wc -l <"$tmp/ptest")" -eq 25 ] || fail "--present-test: not 25 snapshots"
@@ -52,11 +60,11 @@ for t in 00000000 00000010 00000020; do
     [ "$(head -c 15 "$f" | tr '\n' ' ')" = "P6 640 400 255 " ] || fail "picture $f: header"
     [ "$(wc -c <"$f")" -eq 768015 ] || fail "picture $f: size"
 done
-[ "$(od -An -tu1 "$tmp/store/runs" | tr -s ' ')" = " 1 0 0 0" ] || fail "storage: first run"
+[ "$(bytes_of "$tmp/store/runs")" = "1 0 0 0" ] || fail "storage: first run"
 # the same input again: the same frames, and the record counts the second run
 run_demo "$tmp/run2"
 [ "$(hash_of "$tmp/run1" t20)" = "$(hash_of "$tmp/run2" t20)" ] || fail "runs differ"
-[ "$(od -An -tu1 "$tmp/store/runs" | tr -s ' ')" = " 2 0 0 0" ] || fail "storage: second run"
+[ "$(bytes_of "$tmp/store/runs")" = "2 0 0 0" ] || fail "storage: second run"
 
 # ---- the pack and its profile ---------------------------------------------------------------
 # A pack with one entry, "profile" (lrvne/pack.h): id=smoke, title, speed=3. With speed 3 the
