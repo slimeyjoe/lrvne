@@ -26,3 +26,21 @@ queue), keys that register on release (the key-down map's edge), effects timed
 by CPU speed (`lrv_sys_cpu`, with a reference speed that has to be measured),
 and interpreters that poll a music driver in a loop with no wait (charge CPU
 work per statement so time passes).
+
+## Small gaps reported by the engines already on lrvne
+
+Worked around in the engines today; each is a small, additive change here.
+
+- `lrv_sys_trace_items` carries one integer (`a0`); events with items and two
+  integers are built by hand.
+- Hooks can be added to an `lrv_sys` but not removed; an engine whose tick
+  handler comes and goes keeps one permanent hook that dispatches.
+- Relative mouse motion is that of the last poll only; an engine that reads it
+  less often accumulates it itself.
+- There is no helper to read one `key=value` from a META entry of a pack
+  without declaring a profile field table.
+- `lrv_sys_key_flush` does not poll afterwards, so a quit requested during a
+  flush is seen one frame later.
+- The presentation test of a backend runs once an engine has opened its video
+  mode, so it needs the engine's pack; a mode given on the command line would
+  make it data-free again.
