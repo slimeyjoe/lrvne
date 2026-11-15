@@ -16,9 +16,11 @@ A source is given as a path, and is any of
   - a disk image (the `diskimg` module: D88, FDI, HDI, NHD, raw) with the file systems of the
     registry passed as `filesystems=`;
   - a CD image (the `cdimg` module: .iso, raw .bin/.img, or its .cue/.ccd sheet);
-  - `CONTAINER::member`: one member of an archive, e.g. `disks.zip::game/disk1.d88`.
+  - `CONTAINER::member`: one member of an archive, e.g. `disks.zip::game/disk1.d88`;
+  - a file in an archive format of a game's own, read by a function the caller registers for
+    its file name extension (`containers=`).
 Containers nest: an archive in a directory, an image in an archive in an archive. What is
-*inside* a disk or CD image is not opened further.
+*inside* a disk or CD image, or inside a container of a game's own, is not opened further.
 
 Every file found is an `Entry`: its logical path (`disks.zip::disk1.d88::DATA/FILE.DAT`, the
 containers joined with `::`), the file name, where it came from, and `read()`. Nothing is read
@@ -47,7 +49,7 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass, field
-from typing import Callable, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from . import cdimg, diskimg
 from ._util import md5_hex, safe_join, write_file
@@ -57,6 +59,10 @@ SEP = '::'
 ARCHIVE_EXT = ('.7z', '.rar', '.lzh', '.lha', '.cab', '.tar', '.tgz', '.tar.gz', '.tar.bz2',
                '.tar.xz')
 _SPOOL_LIMIT = 32 << 20         # larger archive members are unpacked to a file, not to memory
+
+# Reads a file in an archive format of a game's own: the (member name, contents) pairs of the
+# file's bytes; None when the file is not in the format; ValueError when it is damaged.
+ContainerReader = Callable[[bytes], Optional[Iterable[Tuple[str, bytes]]]]
 
 
 class SourceError(Exception):
@@ -218,11 +224,13 @@ class Source:
 
     def __init__(self, spec: str, filesystems: Optional[diskimg.Filesystems] = None,
                  on_skip: Optional[Callable[[str, str], None]] = None,
-                 tools: Optional[Sequence[Tuple[str, str]]] = None) -> None:
+                 tools: Optional[Sequence[Tuple[str, str]]] = None,
+                 containers: Optional[Mapping[str, ContainerReader]] = None) -> None:
         self.spec = spec
         self.filesystems = filesystems or diskimg.default_filesystems()
         self.on_skip = on_skip
         self.tools = tools
+        self.containers = {ext.lower(): reader for ext, reader in (containers or {}).items()}
         self.skipped: List[Tuple[str, str]] = []
         self._stack = contextlib.ExitStack()
         self._tmpdir: Optional[str] = None
@@ -336,6 +344,13 @@ class Source:
         """The entries of one file: those of the container it is, or the file itself."""
         inner = path + SEP if path else ''
         ext = _ext(f.name)
+        if ext in self.containers:
+            members = self._own_container(f, label, ext)
+            if members is not None:
+                for name, data in members:
+                    yield Entry(inner + name.replace('\\', '/').lstrip('/'), label, 'container',
+                                len(data), f.mtime(), None, lambda data=data: data)
+                return
         try:
             if ext == '.zip':
                 yield from self._scan_zip(self._open_zip(f), label, inner)
@@ -363,6 +378,16 @@ class Source:
         if top and not path:
             path = f.name
         yield Entry(path, origin or label, kind, f.size, f.mtime(), None, f.read)
+
+    def _own_container(self, f: _File, label: str, ext: str) -> Optional[List[Tuple[str, bytes]]]:
+        """The members of a file whose extension has a reader; None when the reader says the
+        file is not in its format, or cannot read it (which is reported)."""
+        try:
+            members = self.containers[ext](f.read())
+            return None if members is None else list(members)
+        except ValueError as e:
+            self._skip(label, e)
+            return None
 
     def _scan_disk(self, f: _File, label: str, prefix: str) -> Iterator[Entry]:
         images = diskimg.open_images(f.read(), label)
@@ -401,14 +426,18 @@ def split_spec(spec: str) -> Tuple[str, List[str]]:
 
 def open_source(spec: str, filesystems: Optional[diskimg.Filesystems] = None,
                 on_skip: Optional[Callable[[str, str], None]] = None,
-                tools: Optional[Sequence[Tuple[str, str]]] = None) -> Source:
+                tools: Optional[Sequence[Tuple[str, str]]] = None,
+                containers: Optional[Mapping[str, ContainerReader]] = None) -> Source:
     """Opens a source (see the module's description).
 
     `filesystems` is the registry of file systems to look for on disk images (default: the
     built-in ones); `tools` replaces the external unpackers found on the PATH, as
-    (kind, executable) pairs with kind 'bsdtar', '7z' or 'unrar'.
+    (kind, executable) pairs with kind 'bsdtar', '7z' or 'unrar'. `containers` maps file name
+    extensions ('.arc', any case) to readers of archive formats of a game's own: a file with
+    such an extension is replaced by the members its reader returns (entries of kind
+    'container'), and stays a plain file when the reader returns None.
     """
-    return Source(spec, filesystems, on_skip, tools)
+    return Source(spec, filesystems, on_skip, tools, containers)
 
 
 def default_roots(specs: Sequence[str], environ: Optional[Mapping[str, str]] = None) -> List[str]:

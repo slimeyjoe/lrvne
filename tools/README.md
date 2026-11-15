@@ -125,6 +125,13 @@ the report names them and the files that have a right name but wrong contents.
 A file system registered this way implements `diskimg.Volume`: `fstype`, `label`, `origin`,
 `image` and `files()`, which yields `diskimg.FileEntry(path, size, mtime, attr, reader)`.
 
+A release that keeps its files in an archive format of its own (a resource archive on a CD) is
+read through a function registered by the archive's file name extension:
+`inventory.Hooks(containers={'.arc': read_arc})`, where `read_arc(data)` returns the archive's
+members as `(name, contents)` pairs, or `None` when the file is not such an archive. Import and
+scan then see the members wherever the archive is found (`source.open_source(...,
+containers=...)` does the same for a script of the engine's).
+
 ## Where the player's media are
 
 Never in the tools and never in a repository. Every command takes its sources as arguments;

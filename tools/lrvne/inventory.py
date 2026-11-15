@@ -177,6 +177,10 @@ class Hooks:
                                   (a boot sector, a whole image: entry.volume.image)
     post_import(report, dest)     called after an import, before its report is printed: the
                                   place for derived data
+    containers                    {'.ext': reader}: archive formats of the game's own that hold
+                                  files of the inventory; a reader takes a file's bytes and
+                                  returns its (name, contents) members, None when the file is
+                                  not in the format (source.open_source has the details)
     """
     dest_path: Callable[[Row], str] = lambda row: row.name
     required: Callable[[Row], bool] = _always
@@ -185,6 +189,7 @@ class Hooks:
     scan_row: Optional[Callable[[source.Entry, bytes], Optional[Mapping[str, str]]]] = None
     on_entry: Optional[Callable[[source.Entry], None]] = None
     post_import: Optional[Callable[['Report', str], None]] = None
+    containers: Mapping[str, source.ContainerReader] = field(default_factory=dict)
 
 
 @dataclass
@@ -282,7 +287,8 @@ def import_files(inventory: Inventory, specs: Sequence[str], dest: str,
         before = len(report.found)
         try:
             src = source.open_source(spec, filesystems,
-                                     lambda label, why: say('skipped %s: %s' % (label, why)))
+                                     lambda label, why: say('skipped %s: %s' % (label, why)),
+                                     containers=hooks.containers)
         except source.SourceError as e:
             raise InventoryError(str(e)) from None
         with src:
@@ -363,7 +369,8 @@ def scan(specs: Sequence[str], columns: Sequence[str] = ('name', 'size', 'md5'),
     for spec in specs:
         try:
             src = source.open_source(spec, filesystems,
-                                     lambda label, why: say('skipped %s: %s' % (label, why)))
+                                     lambda label, why: say('skipped %s: %s' % (label, why)),
+                                     containers=hooks.containers)
         except source.SourceError as e:
             raise InventoryError(str(e)) from None
         with src:
