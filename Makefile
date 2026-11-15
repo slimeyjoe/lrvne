@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # lrvne - GNU Make 4
 #
-#   make [TARGET=host|sdl3|...]     build the demo engine (examples/demo) on the library
+#   make [TARGET=host|sdl3|amiga|warpos|aros]
+#                                   build the demo engine (examples/demo) on the library; the
+#                                   targets are listed in mk/lrvne.mk
 #   make test [SAN=1]               build and run the unit tests, then the demo headless
 #                                   (tests/smoke.sh; host target). SAN=1: with the sanitizers,
 #                                   in a build directory of its own (build/<target>-san)

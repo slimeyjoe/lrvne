@@ -5,16 +5,30 @@
 # the engine's compiler and flags, into the engine's executable. An engine's Makefile sets
 #
 #   LRVNE   := lrvne              where this repository is (a submodule of the engine)
-#   TARGET  ?= host               host | sdl3: a file mk/target/<TARGET>.mk
+#   TARGET  ?= host               a file mk/target/<TARGET>.mk (the list is below)
 #   BUILD   := ../build/$(TARGET) where objects go (see below)
 #   APP_NAME, APP_SRCS, APP_INCLUDES, APP_DEFS   the engine's own
 #
 # and includes this file, which defines the toolchain of the target, the lists of lrvne's
-# sources for it, the compile rules and `$(EXE)`. Switches (0/1):
+# sources for it, the compile rules and `$(EXE)`. The targets:
+#
+#   host      the native compiler, the headless backend (backends/null): tests and tools
+#   sdl3      the native compiler, the SDL3 backend: the player on Linux, macOS, ...
+#   amiga     AmigaOS 3.x on the 68k (vbcc, vasm): AGA/ECS or Picasso96, Paula or AHI
+#   warpos    the same backend for PowerPC cards under WarpOS (vbcc)
+#   aros      the same backend for AROS x86_64 (the AROS cross gcc)
+#
+# The last three are the Amiga family (backends/amiga, its README.md): cross builds whose
+# toolchains are found on the PATH and through their own environment variables.
+#
+# Switches (0/1):
 #
 #   LRVNE_YMFM     the ymfm YM2203 core (C++); the C core is always there
 #   LRVNE_OPUS     the Opus decoder for voice clips
 #   LRVNE_CONTROL  the test automation protocol in the backend
+#
+# A target without a C++ compiler or without a use for the protocol turns the switch off
+# whatever the engine's Makefile says (the Amiga family: mk/amiga.mk).
 #
 # Objects built in different ways never meet:
 #   - This file appends $(LRVNE_BUILD_SUFFIX) to BUILD. A target sets it for builds whose
@@ -23,6 +37,19 @@
 #     include. (A BUILD given on make's command line is taken as it is.)
 #   - $(BUILD)/.lrvne-flags records the compilers and flags; every object depends on it, so
 #     changing a switch or a flag rebuilds what was compiled with the old ones.
+#
+#   - A compiler that writes no dependency files (vbcc) has every object depend on every
+#     header instead (its target sets LRVNE_AUTODEPS := 0; the engine's headers are those next
+#     to APP_SRCS and any listed in APP_HDRS).
+#
+# What a target file defines: CC and CXX, EXESUF, LRVNE_BACKEND_DIRS (the directories of its
+# backend: one, or the parts a family of targets is assembled from; all on the include path),
+# CFLAGS, LDLIBS, COMPILE_C, COMPILE_CXX, COMPILE_S (where it assembles anything), LINK and
+# LRVNE_LD. Optionally LRVNE_BUILD_SUFFIX, LRVNE_AUTODEPS, LRVNE_BACKEND_SKIP (files of
+# backends/common it replaces with its own), LRVNE_EXTRA_SRCS (more of lrvne's sources, e.g.
+# assembly), LRVNE_OPUS_DEFS and LRVNE_OPUS_CSTD (mk/opus.mk), LRVNE_DIST_NAME, and
+# LRVNE_TARGET_POST: make fragments included after the rules below, for rules of its own that
+# need $(BUILD) and $(EXE).
 #
 # Everything here is prefixed LRVNE_ except the conventional CC, CXX, CFLAGS, LDLIBS, BUILD,
 # EXE, Q and V.
@@ -42,6 +69,9 @@ endif
 
 # ---- the target's toolchain: CC, CXX, LRVNE_BACKEND_DIRS, LRVNE_TARGET_*, COMPILE/LINK ------
 LRVNE_BUILD_SUFFIX :=
+LRVNE_AUTODEPS     := 1
+LRVNE_BACKEND_SKIP :=
+LRVNE_TARGET_POST  :=
 include $(LRVNE)/mk/target/$(TARGET).mk
 BUILD := $(BUILD)$(LRVNE_BUILD_SUFFIX)
 
@@ -59,6 +89,7 @@ LRVNE_DEFS     += -DLRV_HAVE_OPUS
 endif
 
 LRVNE_BACKEND_SRCS := $(sort $(foreach d,$(LRVNE_BACKEND_DIRS) $(LRVNE)/backends/common,$(wildcard $(d)/*.c)))
+LRVNE_BACKEND_SRCS := $(filter-out $(LRVNE_BACKEND_SKIP),$(LRVNE_BACKEND_SRCS))
 ifeq ($(LRVNE_CONTROL),1)
 LRVNE_BACKEND_SRCS += $(sort $(wildcard $(LRVNE)/backends/control/*.c))
 LRVNE_DEFS         += -DLRV_HAVE_CONTROL
@@ -113,5 +144,19 @@ $(BUILD)/%.o: %.s $(LRVNE_FLAGS_FILE)
 	@echo "  AS    $<"
 	$(Q)$(COMPILE_S)
 
+# without dependency files: a header change rebuilds everything (an object compiled against
+# an older structure layout would otherwise survive and corrupt state)
+ifeq ($(LRVNE_AUTODEPS),0)
+LRVNE_ALL_HDRS := $(wildcard $(LRVNE)/include/lrvne/*.h $(LRVNE)/backends/*/*.h \
+                    $(LRVNE)/backends/*/*/*.h $(addsuffix *.h,$(sort $(dir $(APP_SRCS))))) \
+                  $(APP_HDRS)
+$(OBJS): $(LRVNE_ALL_HDRS)
+endif
+
 .SECONDARY:
 -include $(DEPS)
+
+# ---- the target's own rules -----------------------------------------------------------------
+ifneq ($(strip $(LRVNE_TARGET_POST)),)
+include $(LRVNE_TARGET_POST)
+endif
