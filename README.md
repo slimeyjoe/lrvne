@@ -20,7 +20,7 @@ on it adds the interpreter and formats of one original engine; a game is then a
                             original engine
    ------------------------------------------------------------------
    lrvne                    src/       portable C99, no I/O, no threads
-                            backends/  null, SDL3, Amiga family
+                            backends/  null (headless), SDL3
    ------------------------------------------------------------------
    host
 ```
@@ -29,14 +29,19 @@ on it adds the interpreter and formats of one original engine; a game is then a
 
 | Part | Purpose |
 |---|---|
-| `include/lrvne/` | the public headers; `hal.h` is the interface to the host, `app.h` the one between an engine and a backend |
-| `src/core` | frame loop, input model, trace events, diagnostics |
-| `src/pack`, `src/profile` | the asset pack reader and the game profile parser |
-| `src/gfx`, `src/text`, `src/snd`, `src/codec` | planar pages and palettes, fonts and text encodings, FM cores and mixing, decoders |
-| `src/machine` | constants and key maps of the machines modelled (PC-98) |
-| `backends/` | `null` (headless, for tests), `sdl3`, `amiga`; `control` is the test automation protocol |
-| `tools/lrvne` | Python: disk and CD image readers, the pack and font builders |
-| `examples/demo` | a minimal engine, the in-tree consumer |
+| `include/lrvne/` | the public headers, one per module; each is its module's documentation. `hal.h` is the interface to the host, `app.h` the one between an engine and a backend |
+| `src/core` | `sys`: the frame loop with its hooks, the input queue, quit and reset, trace events; `core`: errors, logging, allocation; key names |
+| `src/pack`, `src/profile` | the asset pack reader (languages, entries read in ranges) and the game profile parser |
+| `src/gfx` | `screen`: pages, dirty rectangles, palette, overlays, presentation; palette fades, the frame hash; planar-to-chunky conversion and integer scaling for backends |
+| `src/text` | glyph tables, Shift-JIS and UTF-8, glyph cells into planar pages, reflow of translated text |
+| `src/snd` | the OPN (YM2203) cores, the register-write queue that runs a music driver in sample time, the mixer (push and pull delivery), the voice clip player |
+| `src/codec` | LZSS; the voice clip decoders (8-bit PCM, delta codes, Opus) |
+| `src/machine/pc98` | the PC-98: its video mode and its keyboard as the originals read it |
+| `backends/` | `null` (headless and deterministic, for tests), `sdl3` (the player); `common` is what they share (command line, pack and storage paths, scripted input, snapshots), `control` the test automation protocol |
+| `examples/demo` | a small engine that uses all of the above: read it first |
+| `tools/` | Python: the pack and font builders, readers of disk and CD images |
+| `fonts/`, `third_party/` | the bitmap fonts the glyph tables are built from; ymfm and the Opus decoder |
+| `docs/` | [the architecture](docs/architecture.md), [porting an engine onto lrvne](docs/porting-an-engine.md) |
 
 ## Using it in an engine
 
@@ -45,6 +50,8 @@ install. Add it as a git submodule and include its make fragment:
 
 ```make
 LRVNE    := lrvne
+TARGET   ?= host
+BUILD    := build/$(TARGET)
 APP_NAME := myengine
 APP_SRCS := $(wildcard engine/*.c engine/*/*.c)
 include $(LRVNE)/mk/lrvne.mk
@@ -54,18 +61,40 @@ all: $(EXE)
 
 `make TARGET=host` builds with the headless backend, `TARGET=sdl3` the player.
 The engine describes itself in a `struct lrv_app` (`include/lrvne/app.h`) and
-its `main` is a call to `lrv_app_main`. `examples/demo` shows all of it.
+its `main` is a call to `lrv_app_main`. `examples/demo/demo.c` shows all of it
+in one file: a profile and fonts from the pack, the PC-98 screen with a
+software pointer, the keyboard translation, FM music through the mixer, a
+storage record, trace events. `docs/porting-an-engine.md` is the step-by-step
+for an engine that has its own copy of such a layer.
 
 ## Building and testing lrvne itself
 
 ```
-make test            # unit tests (add SAN=1 for the sanitizers)
-make TARGET=sdl3     # the demo engine in a window
-make check           # tests, tool tests, leak check
+make                 # the demo engine with the headless backend: build/host/lrvdemo
+make test            # unit tests, then the demo run headless (tests/smoke.sh)
+make test SAN=1      # the same under the address and undefined-behaviour sanitizers
+make TARGET=sdl3     # the demo engine in a window: build/sdl3/lrvdemo
+make check           # test, the tools' tests, the leak check
 ```
 
+Build switches (`0` or `1`; changing one rebuilds what depends on it):
+
+| Switch | Default | |
+|---|---|---|
+| `LRVNE_YMFM` | 1 | the ymfm YM2203 core (C++); the light C core is always built |
+| `LRVNE_OPUS` | 0 | the Opus decoder for voice clips (vendored libopus, decoder only) |
+| `LRVNE_CONTROL` | 1 | the test automation protocol (`--control`) in the backends |
+| `SAN` | 0 | sanitizers, on the hosted targets; objects go to `build/<target>-san` |
+
 Requirements: a C99 compiler, GNU Make 4; a C++14 compiler for the optional
-ymfm sound core; SDL3 for the `sdl3` target; Python 3 for the tools.
+ymfm sound core; SDL3 (found with pkg-config) for the `sdl3` target; Python 3
+for the tools.
+
+The demo, once built: `lrvdemo --help` lists the options every engine gets
+from its backend. `lrvdemo --autoplay "at:5=a,30=esc snap:20"` is a scripted
+headless run that prints a snapshot of frame 20; `lrvdemo --control` speaks
+the test protocol on stdin and stdout; `lrvdemo --render-wav tune.wav --song
+tune` renders the demo's music offline.
 
 ## Conventions
 
@@ -75,6 +104,8 @@ ymfm sound core; SDL3 for the `sdl3` target; Python 3 for the tools.
 - All formats are little-endian and read bytewise; the code runs on big-endian
   hosts.
 - No game data in this repository, ever. Tests use synthetic fixtures.
+- 4-space indent, 100 columns, `/* */` comments, British spelling, an SPDX
+  line at the top of every file.
 
 ## Licence
 

@@ -5,7 +5,7 @@
 # the engine's compiler and flags, into the engine's executable. An engine's Makefile sets
 #
 #   LRVNE   := lrvne              where this repository is (a submodule of the engine)
-#   TARGET  ?= host               host | sdl3 | amiga | warpos | aros  (mk/target/<TARGET>.mk)
+#   TARGET  ?= host               host | sdl3: a file mk/target/<TARGET>.mk
 #   BUILD   := ../build/$(TARGET) where objects go (see below)
 #   APP_NAME, APP_SRCS, APP_INCLUDES, APP_DEFS   the engine's own
 #
