@@ -7,7 +7,14 @@
  *
  * LRV_FMT_PLANAR4: four bit-planes, plane k holding bit k of the colour index, `stride` bytes
  * per line, the most significant bit the leftmost pixel. A pixel's byte offset in every plane
- * is y * stride + x / 8, as in the video memory of the machines this models. */
+ * is y * stride + x / 8, as in the video memory of the machines this models.
+ *
+ * The lines of a plane follow one another without padding, and the originals address their
+ * video memory by offset. A run of bytes that crosses the right edge therefore continues at
+ * the left edge of the next line; it is not clipped. The functions that take a plane offset or
+ * a column that may run over keep this (lrv_surface_copy_rows, lrv_glyph_blit), and what they
+ * report as changed is then the whole band of lines touched (lrv_screen_mark_off). Only the
+ * ends of the plane are a limit: nothing is written before its first or past its last byte. */
 #ifndef LRVNE_SURFACE_H
 #define LRVNE_SURFACE_H
 

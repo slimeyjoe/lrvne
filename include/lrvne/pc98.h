@@ -10,7 +10,8 @@
  * keypad digits, F1..F10, Shift, Ctrl and Caps Lock are themselves; Pause = STOP, Alt = GRPH,
  * Home = HOME CLR, End (or a Help key) = HELP, Page Up / Down = ROLL DOWN / ROLL UP; the two
  * keys right of P are the PC-98's @ and [, the key right of ; is its : and the US backslash
- * key its ]; the JIS keyboard's yen and ro keys are the PC-98's yen and _. KANA is a lock (LRV_MOD_KANA, a backend's toggle key), as CAPS is. */
+ * key its ]; the JIS keyboard's yen and ro keys are the PC-98's yen and _. CAPS and KANA are
+ * locks, as lrvne/input.h has them: in the bitmap while on, never a key press. */
 #ifndef LRVNE_PC98_H
 #define LRVNE_PC98_H
 

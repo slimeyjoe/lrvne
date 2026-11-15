@@ -51,7 +51,7 @@ static const struct expect {
     { LRV_K_KP_PLUS, NONE, 0, 0 }, { LRV_K_KP_MINUS, NONE, 0, 0 }, { LRV_K_KP_MUL, NONE, 0, 0 },
     { LRV_K_KP_DIV, NONE, 0, 0 }, { LRV_K_KP_PERIOD, NONE, 0, 0 },
     { LRV_K_SHIFT, 0x70, 0, 0 }, { LRV_K_CTRL, 0x74, 0, 0 }, { LRV_K_ALT, 0x73, 0, 0 },
-    { LRV_K_CAPS, 0x71, 0, 0 }, { LRV_K_KANA, NONE, 0, 0 }
+    { LRV_K_CAPS, 0x71, 0, 0 }, { LRV_K_KANA, 0x72, 0, 0 }
 };
 #define NEXPECT ((int)(sizeof expect / sizeof expect[0]))
 
@@ -194,10 +194,10 @@ static void test_keymap(void)
     lrv_pc98_keymap(&in, 0, map);
     CHECK(lrv_pc98_key_down(map, LRV_PC98_K_Z) && lrv_pc98_key_down(map, LRV_PC98_K_ESC));
     CHECK(lrv_pc98_key_down(map, LRV_PC98_K_SHIFT) && lrv_pc98_key_down(map, LRV_PC98_K_UP));
-    CHECK(!lrv_pc98_key_down(map, LRV_PC98_K_KP8) && !lrv_pc98_key_down(map, LRV_PC98_K_KANA));
+    CHECK(!lrv_pc98_key_down(map, LRV_PC98_K_KP8) && lrv_pc98_key_down(map, LRV_PC98_K_KANA));
     for (i = 0, n = 0; i < 128; i++)
         n += lrv_pc98_key_down(map, i);
-    CHECK(n == 4);
+    CHECK(n == 5);
 
     /* the option moves the cursor keys in the bitmap too */
     lrv_pc98_keymap(&in, LRV_PC98_CURSOR_KEYPAD, map);
@@ -210,7 +210,7 @@ static void test_keymap(void)
     CHECK(lrv_pc98_key_down(map, LRV_PC98_K_CAPS) && lrv_pc98_key_down(map, LRV_PC98_K_KANA));
     CHECK(!lrv_pc98_key_down(map, LRV_PC98_K_SHIFT));   /* a level, not a held key */
     in.mods = 0;
-    lrv_key_set(&in, LRV_K_CAPS, 1);                    /* the key itself held */
+    lrv_key_set(&in, LRV_K_CAPS, 1);                    /* the lock as the bitmap has it */
     lrv_pc98_keymap(&in, 0, map);
     CHECK(lrv_pc98_key_down(map, LRV_PC98_K_CAPS) && !lrv_pc98_key_down(map, LRV_PC98_K_KANA));
 

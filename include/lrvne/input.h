@@ -4,7 +4,16 @@
  * Keys are named by their position on a keyboard, not by what a layout prints on them, the way
  * the machines the engines model read their keyboards. What a key means is decided above this
  * layer: a machine module turns the keys into its own scan codes (lrvne/pc98.h), or an engine
- * maps them to its commands directly. A backend never knows either. */
+ * maps them to its commands directly. A backend never knows either.
+ *
+ * Locks. Caps and kana are states, not keys that are held: down[LRV_K_CAPS] and
+ * down[LRV_K_KANA] are 1 while the lock is on, as a key that latches mechanically reads, and
+ * always equal LRV_MOD_CAPS and LRV_MOD_KANA in `mods`. Caps is the host's own lock. Kana is a
+ * lock the backend keeps and toggles with a key of its choice (the host's kana key, Scroll
+ * Lock, ...), since few hosts have one. That toggle is the backend's own key and is never
+ * delivered as a press; LRV_K_CAPS and LRV_K_KANA appear in `keys` only where the host has
+ * that physical key and it was pressed, and nothing above may depend on such a press: the
+ * state is what counts. Shift, Ctrl and Alt likewise are levels and modifiers, not presses. */
 #ifndef LRVNE_INPUT_H
 #define LRVNE_INPUT_H
 
@@ -46,8 +55,8 @@ enum lrv_key {
 #define LRV_MOD_SHIFT (1u << 0)
 #define LRV_MOD_CTRL  (1u << 1)
 #define LRV_MOD_ALT   (1u << 2)
-#define LRV_MOD_CAPS  (1u << 3)     /* caps lock is on */
-#define LRV_MOD_KANA  (1u << 4)     /* kana lock is on (a backend's toggle key) */
+#define LRV_MOD_CAPS  (1u << 3)     /* caps lock is on; down[LRV_K_CAPS] says the same */
+#define LRV_MOD_KANA  (1u << 4)     /* kana lock is on; down[LRV_K_KANA] says the same */
 
 struct lrv_keypress {
     uint8_t key;            /* enum lrv_key */
@@ -72,7 +81,8 @@ struct lrv_input {
     int nkeys;                      /* key presses since the previous poll, oldest first;
                                      * auto-repeat is a key press */
     struct lrv_keypress keys[LRV_KEYQ];
-    uint8_t down[LRV_KEYMAP_BYTES]; /* key-down bitmap: bit (key & 7) of byte key >> 3 */
+    uint8_t down[LRV_KEYMAP_BYTES]; /* key-down bitmap: bit (key & 7) of byte key >> 3; for
+                                     * LRV_K_CAPS and LRV_K_KANA the lock's state */
     unsigned mods;                  /* level: LRV_MOD_* now */
     int mouse_abs;                  /* 1: mouse_x/mouse_y is where the host pointer is */
     int mouse_x, mouse_y;           /* absolute pointer, in pixels of the video mode */
