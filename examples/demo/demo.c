@@ -446,7 +446,7 @@ static int demo_run(void *ctx, const struct lrv_hal *hal, const struct lrv_run_c
     if (hal->video_open(&video) != LRV_OK)
         lrv_fatal(hal, "demo: cannot open the display");
     /* two pages where the display hardware reaches them, no off-screen buffers */
-    if (lrv_screen_init(&d->screen, hal, &video.mode, 2, 0, LRV_MEM_CHIP) != LRV_OK)
+    if (lrv_screen_init(&d->screen, hal, &video.mode, 2, 0, LRV_MEM_ANY) != LRV_OK)
         lrv_fatal(hal, "demo: no memory for the screen");
     lrv_screen_add_overlay(&d->screen, demo_pointer_apply, demo_pointer_restore, d);
 
