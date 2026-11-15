@@ -15,7 +15,7 @@ set -eu
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-private="$(git rev-parse --git-dir)/info/leak-patterns"
+private="$(git rev-parse --git-common-dir)/info/leak-patterns"
 self=scripts/check-leaks.sh
 
 generic='(/home/[a-z_]|/Users/[A-Za-z_]|~/repos|~/Downloads|\.venvs/|/storage/|/mnt/|[a-z0-9-]+\.local[:/ ]|[a-z0-9-]+\.lan[:/ ])'
@@ -91,7 +91,7 @@ check_commits() {  # $1 = revision range or list
 }
 
 install_hooks() {
-    hooks="$(git rev-parse --git-dir)/hooks"
+    hooks="$(git rev-parse --git-common-dir)/hooks"
     mkdir -p "$hooks"
     cat >"$hooks/pre-commit" <<'EOF'
 #!/bin/sh
