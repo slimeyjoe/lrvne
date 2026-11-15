@@ -170,8 +170,12 @@ static void dest_rect(SDL_FRect *d, int *nearest)
         *nearest = 0;
         break;
     }
-    d->x = ((float)W - d->w) / 2.0f;
-    d->y = ((float)H - d->h) / 2.0f;
+    /* centred, on whole output pixels: a rectangle that ends inside a pixel would be filtered
+     * into the border, where nothing may be lit */
+    d->x = SDL_floorf(((float)W - d->w) / 2.0f + 0.5f);
+    d->y = SDL_floorf(((float)H - d->h) / 2.0f + 0.5f);
+    d->w = SDL_floorf(d->w + 0.5f);
+    d->h = SDL_floorf(d->h + 0.5f);
 }
 
 /* clears the window and draws the texture into the destination rectangle (no present) */

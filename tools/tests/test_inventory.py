@@ -207,6 +207,33 @@ class Import(unittest.TestCase):
         self.assertEqual(made, [(True, self.dest)])
         self.assertEqual(self.dest_files(), {'TINY.DAT'})
 
+    def test_files_inside_a_container_of_the_games_own(self):
+        def read_bag(data):                     # "BAG", then name\0 + u16 size + data
+            if data[:3] != b'BAG':
+                return None
+            members, at = [], 3
+            while at < len(data):
+                end = data.index(b'\0', at)
+                size = int.from_bytes(data[end + 1:end + 3], 'little')
+                members.append((data[at:end].decode('ascii'), data[end + 3:end + 3 + size]))
+                at = end + 3 + size
+            return members
+
+        bag = b'BAG' + b''.join(name.rsplit('/', 1)[-1].encode() + b'\0' +
+                                len(data).to_bytes(2, 'little') + data
+                                for name, data in GOOD.items())
+        src = os.path.join(self.tmp, 'cd')
+        write(os.path.join(src, 'DATA', 'GAME.BAG'), bag)
+        report = inventory.import_files(self.inv, [src], self.dest, self.hooks)
+        self.assertEqual(len(report.found), 0)              # a file like any other
+        self.hooks.containers = {'.bag': read_bag}
+        report = inventory.import_files(self.inv, [src], self.dest, self.hooks)
+        self.assertTrue(report.ok)
+        self.assertEqual(self.dest_files(), {'disk/' + n for n in GOOD})
+        made = inventory.scan([src], hooks=self.hooks)
+        self.assertEqual(sorted(r.name for r in made.rows),
+                         sorted(n.rsplit('/', 1)[-1] for n in GOOD))
+
     def test_an_inventory_cannot_write_outside_the_destination(self):
         inv = inventory.Inventory.parse('name\tsize\tmd5\nA.TXT\t1\t%s\n' % md5(b'a'))
         src = os.path.join(self.tmp, 'src')

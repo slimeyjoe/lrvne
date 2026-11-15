@@ -153,6 +153,40 @@ class Sources(unittest.TestCase):
         self.assertEqual(list(got), ['own.d88'])
         self.assertEqual(len(skipped), 1)
 
+    def test_a_container_of_a_games_own_format(self):
+        def read_arc(data):                     # "ARC" + count, then name\0 + u8 size + data
+            if data[:3] != b'ARC':
+                return None
+            members, at = [], 4
+            for _ in range(data[3]):
+                end = data.index(b'\0', at)     # ValueError when the directory is cut short
+                size = data[end + 1]
+                members.append((data[at:end].decode('ascii'), data[end + 2:end + 2 + size]))
+                at = end + 2 + size
+            return members
+
+        arc = b'ARC\x02' + b'ONE.DAT\0\x03one' + b'SUB\\TWO.DAT\0\x03two'
+        root = os.path.join(self.tmp, 'media')
+        write(os.path.join(root, 'GAME.ARC'), arc)
+        write(os.path.join(root, 'other.arc'), b'not this format')
+        write(os.path.join(root, 'cut.arc'), b'ARC\x02' + b'ONE.DAT\0\x03one' + b'SUB')
+        write(os.path.join(root, 'in.zip'), zip_bytes({'deep/game.Arc': arc}))
+        with source.open_source(root, containers={'.ARC': read_arc}) as src:
+            entries = {e.path: e for e in src.entries()}
+            got = {path: e.read() for path, e in entries.items()}
+            skipped = src.skipped
+        self.assertEqual(got, {'GAME.ARC::ONE.DAT': b'one', 'GAME.ARC::SUB/TWO.DAT': b'two',
+                               'in.zip::deep/game.Arc::ONE.DAT': b'one',
+                               'in.zip::deep/game.Arc::SUB/TWO.DAT': b'two',
+                               'other.arc': b'not this format',
+                               'cut.arc': b'ARC\x02' + b'ONE.DAT\0\x03one' + b'SUB'})
+        member = entries['GAME.ARC::SUB/TWO.DAT']
+        self.assertEqual((member.name, member.inner_path, member.kind, member.size),
+                         ('TWO.DAT', 'SUB/TWO.DAT', 'container', 3))
+        self.assertEqual([label for label, _ in skipped], [os.path.join(root, 'cut.arc')])
+        got, _ = listing(root)                              # without the reader: plain files
+        self.assertEqual(got['GAME.ARC'], arc)
+
     @unittest.skipUnless(hasattr(os, 'symlink'), 'needs symbolic links')
     def test_links_in_a_directory(self):
         root = os.path.join(self.tmp, 'media')
