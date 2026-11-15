@@ -24,7 +24,8 @@
 #define LRV_PC98_W        640
 #define LRV_PC98_H        400
 #define LRV_PC98_STRIDE   80                            /* bytes per line of a plane */
-#define LRV_PC98_FRAME_NS 17724193u                     /* 56.42 Hz vertical refresh */
+#define LRV_PC98_FRAME_NS 17724211u                     /* 56.42 Hz vertical refresh:
+                                                         * 1e9 / 56.42 to the nearest ns */
 
 /* The 640x400 16-colour graphics mode: four planes, shown 4:3, 16 colours of 4 bits a gun. */
 extern const struct lrv_video_mode lrv_pc98_video_mode;

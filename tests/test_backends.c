@@ -393,7 +393,7 @@ static void test_ptest(void)
 {
     static const struct lrv_ptest_io io = { pt_present, pt_snap };
     static const struct lrv_video_mode pc98 = {
-        LRV_FMT_PLANAR4, 640, 400, 4, 3, 17724193u, 16, 4
+        LRV_FMT_PLANAR4, 640, 400, 4, 3, 17724211u, 16, 4
     };
     static const struct lrv_video_mode small = {
         LRV_FMT_PLANAR4, 320, 200, 4, 3, 16666667u, 16, 3
