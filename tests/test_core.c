@@ -284,6 +284,9 @@ static void test_sys(void)
     CHECK(th_frames == 0 && !strcmp(order, "t"));
     lrv_sys_reset_done(&s);
     CHECK(!lrv_sys_quitting(&s));
+    lrv_sys_request_quit(&s);
+    CHECK(lrv_sys_quitting(&s) && !lrv_sys_resetting(&s));
+    s.quit_requested = 0;
     th_next_input.events = LRV_EV_QUIT;
     lrv_sys_frame_wait(&s);
     CHECK(lrv_sys_quitting(&s) && !lrv_sys_resetting(&s));
