@@ -92,8 +92,9 @@ recorded snapshots.
 ## 5. Sound
 
 The driver stays; its plumbing goes. Create an `lrv_opnq` in front of a core
-(`lrv_opn_select(cfg->opn_core)`) and a mixer whose main source is
-`lrv_opnq_render` and whose skip hook is `lrv_opnq_skip`. Which kind of queue
+(`lrv_opn_select(cfg->opn_core)`, its flags `lrv_opn_flags(cfg->opn_core)`) and a
+mixer whose main source is `lrv_opnq_render` and whose skip hook is
+`lrv_opnq_skip`. Which kind of queue
 depends on how the driver keeps time:
 
 - **Clock-driven** (the driver counts the chip's master clocks, typically

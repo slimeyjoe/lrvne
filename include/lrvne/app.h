@@ -39,7 +39,8 @@ struct lrv_run_cfg {
     int audio_rate;             /* requested output rate, 0 = audio off */
     int volume;                 /* music, percent 1..100; 0 = the default, negative = silent */
     int aux_volume;             /* voice, percent 1..100; 0 = the default */
-    int opn_core;               /* FM emulation: 0 = the best built in, 1 = the light C core */
+    int opn_core;               /* FM emulation: 0 = the best built in, 1 = the light C core,
+                                 * 2 = the light core oversampled (lrv_opn_select, _flags) */
 };
 
 enum lrv_opt_arg { LRV_OPT_FLAG = 0, LRV_OPT_ARG, LRV_OPT_OPTARG };

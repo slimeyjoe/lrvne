@@ -1067,10 +1067,15 @@ const struct lrv_opn_ops lrv_opn_lite_ops = {
 const struct lrv_opn_ops *lrv_opn_select(int which)
 {
 #ifdef LRV_HAVE_YMFM
-    if (which != 1)
+    if (which != 1 && which != 2)
         return &lrv_opn_ymfm_ops;
 #else
     (void)which;
 #endif
     return &lrv_opn_lite_ops;
+}
+
+unsigned lrv_opn_flags(int which)
+{
+    return which == 2 ? LRV_OPN_OVERSAMPLE : 0u;
 }

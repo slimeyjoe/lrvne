@@ -59,7 +59,9 @@ extern const struct lrv_opn_ops lrv_opn_lite_ops;
 extern const struct lrv_opn_ops lrv_opn_ymfm_ops;
 #endif
 
-/* The core for lrv_run_cfg.opn_core: 0 = the best one built in, 1 = the light C core. */
+/* The core for lrv_run_cfg.opn_core: 0 = the best one built in, 1 = the light C core, 2 = the
+ * light C core with its FM part oversampled; and the create() flags that choice asks for. */
 const struct lrv_opn_ops *lrv_opn_select(int which);
+unsigned lrv_opn_flags(int which);
 
 #endif

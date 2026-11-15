@@ -252,11 +252,13 @@ static void demo_sound_reset(struct demo *d)
     lrv_mixer_unlock(&d->mixer);
 }
 
-static int demo_chip(struct demo *d, const struct lrv_opn_ops *ops, uint32_t rate)
+static int demo_chip(struct demo *d, const struct lrv_opn_ops *ops, unsigned flags,
+                     uint32_t rate)
 {
     struct lrv_opnq_cfg qc;
     memset(&qc, 0, sizeof qc);
     qc.ops = ops;
+    qc.core_flags = flags;
     qc.clock_hz = LRV_OPN_CLOCK_PC98;
     qc.rate = rate;
     qc.bus_clocks = LRV_OPN_FM_DIV;         /* writes reach the chip one FM sample apart */
@@ -281,14 +283,16 @@ static uint32_t demo_sound_open(struct demo *d, const struct lrv_run_cfg *cfg, i
     mc.skip = lrv_opnq_skip;                /* for a backend that falls behind */
     mc.ctx = &d->opnq;
     lrv_mixer_init(&d->mixer, d->hal, &mc);
-    if (demo_chip(d, lrv_opn_select(cfg->opn_core), (uint32_t)cfg->audio_rate) != LRV_OK)
+    if (demo_chip(d, lrv_opn_select(cfg->opn_core), lrv_opn_flags(cfg->opn_core),
+                  (uint32_t)cfg->audio_rate) != LRV_OK)
         lrv_fatal(d->hal, "demo: cannot create the sound chip");
     rate = lrv_opnq_rate(&d->opnq);
     got = device && rate ? lrv_mixer_open(&d->mixer, (int)rate) : 0;
     if (got && (uint32_t)got != rate &&
         lrv_opnq_set_rate(&d->opnq, (uint32_t)got) != (uint32_t)got) {
         lrv_opnq_free(&d->opnq);            /* nothing renders before lrv_mixer_start */
-        if (demo_chip(d, &lrv_opn_lite_ops, (uint32_t)got) != LRV_OK)
+        if (demo_chip(d, &lrv_opn_lite_ops, lrv_opn_flags(cfg->opn_core), (uint32_t)got) !=
+            LRV_OK)
             lrv_fatal(d->hal, "demo: cannot create the sound chip");
     }
     rate = lrv_opnq_rate(&d->opnq);
