@@ -2,6 +2,9 @@
 /* Unit tests of what the backends share (backends/common): the command line parser, scripted
  * input, pack discovery and storage in a scratch directory, the presentation test and the
  * snapshot and WAV writers. */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE        /* mkdtemp under strict POSIX flags */
+#endif
 #include <fcntl.h>
 #include <stdarg.h>
 #include <sys/stat.h>
