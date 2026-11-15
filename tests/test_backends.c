@@ -156,6 +156,74 @@ static void test_args(void)
     CHECK(strstr(text, "keys: none\n") && strstr(text, "backend keys: none\n"));
 }
 
+/* the same tables walked by a host with a command line syntax of its own */
+static int option_index(const char *name)
+{
+    const struct lrv_option *o;
+    int i;
+    for (i = 0; (o = lrv_args_option_at(&test_app, &test_backend, i)) != 0; i++)
+        if (!strcmp(o->name, name))
+            return i;
+    return -1;
+}
+
+static int set(struct lrv_args *a, const char *name, const char *arg)
+{
+    return lrv_args_set(a, &test_app, &test_backend, option_index(name), arg);
+}
+
+static void test_args_walk(void)
+{
+    struct lrv_args a;
+    const struct lrv_option *o;
+    int i, n = 0, tests = 0;
+
+    /* the common options without --help and --version, then the backend's, then the engine's */
+    for (i = 0; (o = lrv_args_option_at(&test_app, &test_backend, i)) != 0; i++) {
+        CHECK(strcmp(o->name, "help") && strcmp(o->name, "version"));
+        tests += lrv_args_option_is_test(&test_app, &test_backend, i);
+        n++;
+    }
+    CHECK(n == 13 + 2 + 2 && tests == 3);
+    CHECK(option_index("pak") == 0 && option_index("fullscreen") == 13);
+    CHECK(option_index("speed") == 15 && option_index("view") == 16);
+    CHECK(lrv_args_option_is_test(&test_app, &test_backend, option_index("autoplay")));
+    CHECK(!lrv_args_option_is_test(&test_app, &test_backend, option_index("scale")));
+    CHECK(!lrv_args_option_at(&test_app, &test_backend, -1));
+
+    /* nothing given */
+    lrv_args_begin(&a);
+    lrv_args_end(&a, &test_backend);
+    CHECK(a.cfg.audio_rate == 44100 && !a.pak && !a.no_voice);
+
+    /* options of all three sets mean what they mean to lrv_args_parse */
+    opt_speed = backend_scale = opt_view_seen = 0;
+    lrv_args_begin(&a);
+    CHECK(set(&a, "pak", "game.pak") == 0 && set(&a, "voice-pak", "v.pak") == 0);
+    CHECK(set(&a, "volume", "0") == 0 && set(&a, "rate", "22050") == 0);
+    CHECK(set(&a, "no-voice", 0) == 0 && set(&a, "max-ticks", "99") == 0);
+    CHECK(set(&a, "fullscreen", "ignored") == 0 && set(&a, "scale", "3") == 0);
+    CHECK(set(&a, "speed", "7") == 0 && set(&a, "view", 0) == 0);
+    lrv_args_end(&a, &test_backend);
+    CHECK(!strcmp(a.pak, "game.pak") && !strcmp(a.voice_pak, "v.pak") && a.no_voice);
+    CHECK(a.cfg.volume < 0 && a.cfg.audio_rate == 22050 && a.max_ticks == 99);
+    CHECK(a.cfg.fullscreen == 1 && backend_scale == 3 && opt_speed == 7);
+    CHECK(opt_view_seen == 1 && !opt_view);
+    CHECK(set(&a, "view", "TITLE") == 0 && opt_view && !strcmp(opt_view, "TITLE"));
+
+    /* --no-audio wins over --rate here too */
+    lrv_args_begin(&a);
+    CHECK(set(&a, "rate", "48000") == 0 && set(&a, "no-audio", 0) == 0);
+    lrv_args_end(&a, &test_backend);
+    CHECK(a.cfg.audio_rate == 0);
+
+    /* what is refused, silently: reporting is the backend's */
+    CHECK(set(&a, "pak", 0) != 0);                  /* argument missing */
+    CHECK(set(&a, "volume", "loud") != 0);
+    CHECK(set(&a, "speed", "0") != 0);              /* the engine said no */
+    CHECK(lrv_args_set(&a, &test_app, &test_backend, n, 0) != 0);   /* no such option */
+}
+
 /* ---- autoplay ------------------------------------------------------------------------------ */
 
 static void poll_at(struct lrv_autoplay *ap, uint32_t tick, struct lrv_input *in)
@@ -560,6 +628,7 @@ static void test_wav(void)
 int main(void)
 {
     test_args();
+    test_args_walk();
     test_autoplay();
     test_paths();
     test_ptest();
