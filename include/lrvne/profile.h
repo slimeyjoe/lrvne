@@ -54,11 +54,15 @@ struct lrv_profile_base {
     char modules[160];      /* comma-separated native modules the game enables */
 };
 
+/* (the offset in two steps: not every compiler's offsetof takes a member of a member) */
+#define LRV_PF_BASE_STR(key, type, member, field) \
+    { key, LRV_PF_T_STR, offsetof(type, member) + offsetof(struct lrv_profile_base, field), \
+      sizeof(((struct lrv_profile_base *)0)->field), 0, 0, 0 }
 #define LRV_PROFILE_BASE_FIELDS(type, member) \
-    LRV_PF_STR("id", type, member.id), \
-    LRV_PF_STR("title", type, member.title), \
-    LRV_PF_STR("lang", type, member.lang), \
-    LRV_PF_STR("modules", type, member.modules)
+    LRV_PF_BASE_STR("id", type, member, id), \
+    LRV_PF_BASE_STR("title", type, member, title), \
+    LRV_PF_BASE_STR("lang", type, member, lang), \
+    LRV_PF_BASE_STR("modules", type, member, modules)
 
 /* Called for each line that cannot be used: line number from 1, the key (NUL terminated) and
  * what is wrong with it. */
