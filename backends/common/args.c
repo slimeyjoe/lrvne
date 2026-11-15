@@ -109,13 +109,8 @@ static int find(const struct lrv_option *o, int n, const char *name, size_t len)
     return -1;
 }
 
-struct common_state {
-    long rate;
-    int no_audio;
-};
-
 /* one of the common options; returns 0, or nonzero when the argument is bad */
-static int common_option(struct lrv_args *a, struct common_state *st, int which, const char *arg)
+static int common_option(struct lrv_args *a, int which, const char *arg)
 {
     long v;
     switch (which) {
@@ -124,7 +119,7 @@ static int common_option(struct lrv_args *a, struct common_state *st, int which,
     case O_STORAGE:   a->storage = arg; return 0;
     case O_VOICE_PAK: a->voice_pak = arg; return 0;
     case O_NO_VOICE:  a->no_voice = 1; return 0;
-    case O_NO_AUDIO:  st->no_audio = 1; return 0;
+    case O_NO_AUDIO:  a->no_audio = 1; return 0;
     case O_AUTOPLAY:  a->autoplay = arg; return 0;
     case O_CONTROL:   a->control = 1; return 0;
     case O_VOLUME:
@@ -138,7 +133,7 @@ static int common_option(struct lrv_args *a, struct common_state *st, int which,
         a->cfg.aux_volume = (int)v;
         return 0;
     case O_RATE:
-        return !lrv_args_int(arg, 1000, 384000, &st->rate);
+        return !lrv_args_int(arg, 1000, 384000, &a->rate);
     case O_OPN:
         if (strcmp(arg, "ymfm") && strcmp(arg, "lite"))
             return 1;
@@ -151,14 +146,65 @@ static int common_option(struct lrv_args *a, struct common_state *st, int which,
     }
 }
 
+/* ---- the tables walked by a host with its own syntax -------------------------------------- */
+
+#define COMMON_SETTABLE O_HELP      /* the common options a host hands over: all but the last two */
+
+void lrv_args_begin(struct lrv_args *a)
+{
+    memset(a, 0, sizeof *a);
+}
+
+void lrv_args_end(struct lrv_args *a, const struct lrv_args_backend *be)
+{
+    a->cfg.audio_rate = a->no_audio ? 0 : a->rate ? (int)a->rate : be->default_rate;
+}
+
+const struct lrv_option *lrv_args_option_at(const struct lrv_app *app,
+                                            const struct lrv_args_backend *be, int i)
+{
+    if (i < 0)
+        return 0;
+    if (i < COMMON_SETTABLE)
+        return &g_common[i];
+    i -= COMMON_SETTABLE;
+    if (i < be->noptions)
+        return &be->options[i];
+    i -= be->noptions;
+    return i < app->noptions ? &app->options[i] : 0;
+}
+
+int lrv_args_option_is_test(const struct lrv_app *app, const struct lrv_args_backend *be, int i)
+{
+    (void)app;
+    (void)be;
+    return i >= O_AUTOPLAY && i < COMMON_SETTABLE;
+}
+
+int lrv_args_set(struct lrv_args *a, const struct lrv_app *app,
+                 const struct lrv_args_backend *be, int i, const char *arg)
+{
+    const struct lrv_option *opt = lrv_args_option_at(app, be, i);
+
+    if (!opt)
+        return 1;
+    if (opt->arg == LRV_OPT_FLAG)
+        arg = 0;
+    else if (opt->arg == LRV_OPT_ARG && !arg)
+        return 1;
+    if (i < COMMON_SETTABLE)
+        return common_option(a, i, arg);
+    if (i < COMMON_SETTABLE + be->noptions)
+        return be->option ? be->option(a, opt->name, arg) : 1;
+    return app->option ? app->option(app->ctx, opt->name, arg) : 1;
+}
+
 int lrv_args_parse(struct lrv_args *a, const struct lrv_app *app,
                    const struct lrv_args_backend *be, int argc, char **argv)
 {
-    struct common_state st;
     int i;
 
-    memset(a, 0, sizeof *a);
-    memset(&st, 0, sizeof st);
+    lrv_args_begin(a);
     for (i = 1; i < argc; i++) {
         const char *word = argv[i], *name, *eq, *arg = 0;
         const struct lrv_option *opt;
@@ -217,7 +263,7 @@ int lrv_args_parse(struct lrv_args *a, const struct lrv_app *app,
             return LRV_ARGS_DONE;
         }
         if (set == 0)
-            bad = common_option(a, &st, k, arg);
+            bad = common_option(a, k, arg);
         else if (set == 1)
             bad = be->option ? be->option(a, opt->name, arg) : 1;
         else
@@ -230,6 +276,6 @@ int lrv_args_parse(struct lrv_args *a, const struct lrv_app *app,
             return LRV_ARGS_BAD;
         }
     }
-    a->cfg.audio_rate = st.no_audio ? 0 : st.rate ? (int)st.rate : be->default_rate;
+    lrv_args_end(a, be);
     return LRV_ARGS_RUN;
 }

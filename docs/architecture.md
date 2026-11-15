@@ -21,7 +21,7 @@ the whole of it at work in one file.
                    codec   LZSS, voice clip decoders
                    pack, profile, machine/pc98
            ---------------------------------------- struct lrv_hal (hal.h) --
-           backends/   null | sdl3     + common, control
+           backends/   null | sdl3 | amiga     + common, control
    --------------------------------------------------------------------------
    host            window system, audio device, files, clock
 ```
@@ -105,7 +105,16 @@ every backend and host, which is what tests compare pictures by.
 
 `lrv_app_main` is the backend: it parses the command line (its options, the
 ones every engine has, the engine's own through `struct lrv_app`), builds the
-HAL and calls the engine's `run`.
+HAL and calls the engine's `run`. A host with a command line convention of its
+own drives the same option tables in its own spelling: the Amiga backend makes
+an AmigaDOS argument template and icon tool types of them.
+
+The backends: `null` is headless and deterministic; `sdl3` is the player on
+hosts SDL3 runs on; `amiga` is a family, one set of sources for AmigaOS 3.x on
+the 68k, WarpOS and AROS, assembled per target from parts (its own screen or a
+window, native planar and graphics card displays, Paula and AHI, an audio task
+with a CPU budget that uses the audio source's `skip`;
+`backends/amiga/README.md`).
 
 ## How an engine is structured
 
@@ -183,7 +192,9 @@ Everything is tested without a human and without game data.
   input are the same tick for tick. `tests/smoke.sh` drives the demo this way.
 - **The presentation test** (`--present-test`, `backends/common/ptest.h`) is a
   fixed sequence of presents through every path of a `video_present`. Its
-  snapshot hashes are the reference for a backend with a real display.
+  snapshot hashes are the reference for a backend with a real display: the
+  Amiga backend runs the same sequence on its screen (`PRESENTTEST`) and, on
+  AROS, reads every snapshot back from it for comparison.
 - **The control protocol** (`--control`, `backends/control/`) is for tests of a
   whole game. The engine's trace events come out as JSON lines on stdout, and
   the engine stops at well-defined points: when it waits for the player's
