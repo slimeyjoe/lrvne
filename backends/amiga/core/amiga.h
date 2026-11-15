@@ -163,7 +163,9 @@ struct am_stack { ULONG *lower, *upper; };
 void  am_stack_paint(struct am_stack *st);
 ULONG am_stack_used(const struct am_stack *st);
 ULONG am_stack_size(const struct am_stack *st);
-extern struct am_stack am_audio_stack;     /* audio.c: the audio process's stack */
+/* audio.c: the audio task's stack, measured by the task itself as it ends (its stack is gone
+ * with it) */
+extern ULONG am_audio_stack_used, am_audio_stack_total;
 
 /* audio.c: the HAL's audio functions */
 void am_audio_init(void);                   /* before the engine runs: the lock must exist early */

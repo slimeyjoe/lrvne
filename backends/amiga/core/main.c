@@ -664,8 +664,7 @@ static void report(int rc)
            (unsigned long)(g_free0[1] >> 10), (unsigned long)(g_free0[0] >> 10));
     am_log("stack: main %lu of %lu bytes used, audio %lu of %lu\n",
            (unsigned long)am_stack_used(&g_main_stack), (unsigned long)am_stack_size(&g_main_stack),
-           (unsigned long)am_stack_used(&am_audio_stack),
-           (unsigned long)am_stack_size(&am_audio_stack));
+           (unsigned long)am_audio_stack_used, (unsigned long)am_audio_stack_total);
 }
 
 static int run(void)

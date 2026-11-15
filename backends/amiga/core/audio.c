@@ -214,7 +214,14 @@ static void voice_cmd(void)
 
 /* The audio task. Signals the main task once the device is open (ready) and once more when
  * it has closed everything and is about to end (done). */
-struct am_stack am_audio_stack;
+ULONG am_audio_stack_used, am_audio_stack_total;
+static struct am_stack g_stack;
+
+static void stack_note(void)
+{
+    am_audio_stack_used = am_stack_used(&g_stack);
+    am_audio_stack_total = am_stack_size(&g_stack);
+}
 
 static void audio_task(void)
 {
@@ -222,10 +229,11 @@ static void audio_task(void)
     /* the task as the OS sees it: on WarpOS the 68k mirror, which the Paula interrupt and
      * the main task's Signal() use; the drivers' am_wait() receives those signals */
     g.task = FindTask(NULL);
-    am_stack_paint(&am_audio_stack);
+    am_stack_paint(&g_stack);
     g.quit_sig = AllocSignal(-1);
     if (g.quit_sig == -1) {
         g.rate = 0;
+        stack_note();
         am_task_end_forbid();
         Signal(am_main_task, (1UL << g.ready_sig) | (1UL << g.done_sig));
         return;
@@ -235,6 +243,7 @@ static void audio_task(void)
     if (g.rate <= 0) {
         g.rate = 0;
         FreeSignal(g.quit_sig);
+        stack_note();
         am_task_end_forbid();
         Signal(am_main_task, (1UL << g.ready_sig) | (1UL << g.done_sig));
         return;
@@ -265,6 +274,7 @@ static void audio_task(void)
     g.cmd_sig = -1;
     FreeSignal(g.quit_sig);
     g.running = 0;
+    stack_note();
     am_task_end_forbid();
     Signal(am_main_task, 1UL << g.done_sig);
     /* returning ends the task (exec: dos frees the process, Forbid holds until then; WarpOS:
