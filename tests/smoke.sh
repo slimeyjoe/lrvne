@@ -6,8 +6,9 @@
 #   tests/smoke.sh build/host/lrvdemo
 #
 # Covered: the presentation test, scripted input with snapshots and pictures, storage, pack
-# discovery (--pak, <program>.pak, a pack appended to the program) and the profile in the
-# pack, the control protocol, the tick limit, offline sound, the command line's errors.
+# discovery (--pak, <program>.pak, a pack appended to the program), the profile and a font in
+# the pack, the control protocol, the tick limit, sound (offline, pushed and pulled), the
+# command line's errors.
 set -eu
 
 exe=${1:?usage: smoke.sh PATH-TO-lrvdemo}
@@ -88,6 +89,23 @@ chmod +x "$tmp/install/bundled"
 (cd "$tmp/store" && "$tmp/install/bundled" --autoplay "$spec" >"$tmp/bundled") ||
     fail "the program with a bundled pack exited with $?"
 [ "$(hash_of "$tmp/bundled" t20)" = "$want" ] || fail "the bundled pack was not used"
+# A pack that also has a glyph table, "latin8" (lrvne/font.h) with the one glyph 'e', a solid
+# cell: the demo then prints its text, so the picture differs.
+{
+    printf 'XPAK\002\000\002\000\224\000\000\000\000\000\000\000'
+    printf 'latin8\000\000\000\000\000\000\000\000\000\000\000\000\000\000'
+    printf '\002\000\000\000\120\000\000\000\036\000\000\000'
+    printf 'profile\000\000\000\000\000\000\000\000\000\000\000\000\000'
+    printf '\001\000\000\000\160\000\000\000\042\000\000\000'
+    printf 'XFNT\000\010\020\000\001\000\000\000e\000'
+    printf '\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\000\000'
+    printf 'id=smoke\ntitle=Smoke test\nspeed=3\n\000\000'
+} >"$tmp/font.pak"
+[ "$(wc -c <"$tmp/font.pak")" -eq 148 ] || fail "the test pack with a font is not 148 bytes"
+run_demo "$tmp/font" --pak "$tmp/font.pak"
+[ -n "$(hash_of "$tmp/font" t20)" ] && [ "$(hash_of "$tmp/font" t20)" != "$want" ] ||
+    fail "the font in the pack drew nothing"
+grep -q . "$tmp/font.err" && fail "the pack with a font: $(cat "$tmp/font.err")"
 rm -f "$tmp/store/runs"
 
 # ---- the control protocol --------------------------------------------------------------------
@@ -117,9 +135,9 @@ expect 2 '^{"ev":"wait","t":0,.*"a":\[0,0,0,0\]}$'
 expect 3 '^{"ev":"stop","t":1,"why":"start","wait":0,"pending":0}$'
 expect 4 '^{"ev":"ok"}$'
 expect 5 '^{"ev":"stop","t":4,"why":"ticks",'
-expect 9 '^{"ev":"key","t":4,.*"name":"a",.*"a":\[[0-9]*,97,0,0\]}$'
-expect 10 '"name":"return",.*,13,0,0\]}$'
-expect 11 '"name":"b",.*"a":\[[0-9]*,66,1,0\]}$'
+expect 9 '^{"ev":"key","t":4,.*"name":"a",.*"a":\[[0-9]*,97,0,29\]}$'
+expect 10 '"name":"return",.*,13,0,28\]}$'
+expect 11 '"name":"b",.*"a":\[[0-9]*,66,1,45\]}$'
 expect 12 '^{"ev":"stop","t":5,"why":"break",'
 expect 13 '^{"ev":"error","msg":"unknown command"}$'
 expect 17 '^{"ev":"stop","t":7,"why":"ticks",'
@@ -139,13 +157,19 @@ rc=0
 rc=0
 "$exe" --storage "$tmp/store" --max-ticks 50 >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 3 ] || fail "--max-ticks: exit code $rc, not 3"
-"$exe" --render-wav "$tmp/tone.wav" --song 440 --seconds 0.1 2>/dev/null ||
+# the light FM core renders at the rate asked for: 0.1 s at 44100 Hz, and it is not silence
+"$exe" --render-wav "$tmp/tune.wav" --song tune --seconds 0.1 --opn lite 2>/dev/null ||
     fail "--render-wav exited with $?"
-[ "$(wc -c <"$tmp/tone.wav")" -eq 8864 ] || fail "--render-wav: size"
-"$exe" --storage "$tmp/store" --wav "$tmp/game.wav" --autoplay "at:5=a,30=esc" 2>/dev/null ||
-    fail "--wav run exited with $?"
-[ "$(head -c 4 "$tmp/game.wav")" = RIFF ] && [ "$(wc -c <"$tmp/game.wav")" -gt 20000 ] ||
-    fail "--wav: no sound recorded"
+[ "$(wc -c <"$tmp/tune.wav")" -eq 8864 ] || fail "--render-wav: size"
+[ "$(tail -c +45 "$tmp/tune.wav" | tr -d '\000' | wc -c)" -gt 1000 ] || fail "--render-wav: silence"
+# what the game plays, in both delivery models (pulling, the backend checks the audio lock)
+for model in push pull; do
+    "$exe" --storage "$tmp/store" --wav "$tmp/game.wav" --audio $model \
+        --autoplay "at:5=a,30=esc" 2>/dev/null || fail "--wav --audio $model exited with $?"
+    [ "$(head -c 4 "$tmp/game.wav")" = RIFF ] && [ "$(wc -c <"$tmp/game.wav")" -gt 20000 ] &&
+        [ "$(tail -c +45 "$tmp/game.wav" | tr -d '\000' | wc -c)" -gt 1000 ] ||
+        fail "--wav --audio $model: no sound recorded"
+done
 for bad in "--nonsense" "--speed 9" "--autoplay at:5=nokey" "--render-wav $tmp/x.wav"; do
     rc=0
     # shellcheck disable=SC2086
