@@ -47,7 +47,7 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass, field
-from typing import BinaryIO, Callable, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from . import cdimg, diskimg
 from ._util import md5_hex, safe_join, write_file
@@ -447,8 +447,8 @@ def _cmd_ls(a: argparse.Namespace) -> int:
         with open_source(spec, on_skip=_warn) as src:
             for e in src.entries():
                 digest = md5_hex(e.read()) + '  ' if a.md5 else ''
-                print('%9s  %-16s  %s%s' % ('' if e.size is None else e.size, e.mtime, digest,
-                                             e.path))
+                size = '' if e.size is None else e.size
+                print('%9s  %-16s  %s%s' % (size, e.mtime, digest, e.path))
     return 0
 
 

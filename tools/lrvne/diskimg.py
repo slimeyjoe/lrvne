@@ -607,8 +607,8 @@ def _cmd_info(a: argparse.Namespace) -> int:
                 extra = ''
                 if isinstance(v, FatVolume):
                     lay = v.layout
-                    extra = ', FAT%d, %d clusters of %d bytes' % (16 if lay.fat16 else 12,
-                                                                 lay.clusters, lay.cluster_size)
+                    extra = ', FAT%d, %d clusters of %d bytes' % (
+                        16 if lay.fat16 else 12, lay.clusters, lay.cluster_size)
                 print('  volume %r (%s%s)' % (v.label, v.fstype, extra))
         except DiskImageError as e:
             print('  %s' % e)

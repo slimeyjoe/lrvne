@@ -304,6 +304,6 @@ def cue_sheet(bin_name: str, tracks: List[Tuple[str, int]]) -> str:
     lines = ['FILE "%s" BINARY' % bin_name]
     for i, (mode, start) in enumerate(tracks, 1):
         lines.append('  TRACK %02d %s' % (i, mode))
-        lines.append('    INDEX 01 %02d:%02d:%02d' % (start // 75 // 60, start // 75 % 60,
-                                                    start % 75))
+        lines.append('    INDEX 01 %02d:%02d:%02d'
+                     % (start // 75 // 60, start // 75 % 60, start % 75))
     return '\n'.join(lines) + '\n'
