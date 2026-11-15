@@ -59,7 +59,13 @@ static void test_mode(void)
 {
     const struct lrv_video_mode *m = &lrv_pc98_video_mode;
     CHECK(m->format == LRV_FMT_PLANAR4 && m->w == 640 && m->h == 400);
-    CHECK(m->aspect_w == 4 && m->aspect_h == 3 && m->frame_ns == 17724193u);
+    CHECK(m->aspect_w == 4 && m->aspect_h == 3 && m->frame_ns == LRV_PC98_FRAME_NS);
+    {
+        /* the refresh is 56.42 Hz = 5642 / 100: 5642 periods are 100 s to within half a
+         * nanosecond a period, so sound paced by the frames keeps the machine's time */
+        int64_t off = (int64_t)m->frame_ns * 5642 - (int64_t)100 * 1000000000;
+        CHECK(off > -2821 && off < 2821);
+    }
     CHECK(m->colours == 16 && m->rgb_bits == 4);
     CHECK(LRV_PC98_STRIDE * 8 == LRV_PC98_W);
 }
