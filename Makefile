@@ -43,11 +43,22 @@ $(BUILD)/tests/%$(EXESUF): $(BUILD)/tests/%.o $(TEST_OBJS)
 	@echo "  LINK  $@"
 	$(Q)$(LRVNE_LD) $(OPT) -o $@ $< $(TEST_OBJS) $(LDLIBS)
 
-# then the demo engine is run headless (tests/smoke.sh), which needs the host target's backend
+# then the demo engine is run headless (tests/smoke.sh), which needs the host target's backend;
+# with it tests/app_leak, an engine that does not free what it allocated, on the same backend
+LEAK_EXE := $(BUILD)/tests/app_leak$(EXESUF)
+-include $(BUILD)/tests/app_leak.d
+
+$(LEAK_EXE): $(BUILD)/tests/app_leak.o $(LRVNE_LIB_OBJS) $(LRVNE_BACKEND_OBJS)
+	@echo "  LINK  $@"
+	$(Q)$(LRVNE_LD) $(OPT) -o $@ $^ $(LDLIBS)
+
+ifeq ($(TARGET),host)
+test: $(TEST_EXES) $(EXE) $(LEAK_EXE)
+	$(Q)for t in $(TEST_EXES); do ./$$t || exit 1; done
+	$(Q)tests/smoke.sh $(EXE) $(LEAK_EXE)
+else
 test: $(TEST_EXES) $(EXE)
 	$(Q)for t in $(TEST_EXES); do ./$$t || exit 1; done
-ifeq ($(TARGET),host)
-	$(Q)tests/smoke.sh $(EXE)
 endif
 
 # the tools (tools/) have their own tests; a checkout without them skips the step

@@ -54,6 +54,16 @@ no longer builds a file name anywhere. The engine's own options are data
 on an Amiga `--view` is the keyword `VIEW` of the shell and a tool type of the
 icon.
 
+When `run` returns, everything the engine allocated through the HAL is freed,
+also after an emergency quit: buffers allocated on first use and the state of
+plug-ins included. The headless backend checks it and fails the run otherwise
+("memory: N bytes in M blocks not freed by the engine", exit code 1). Tests
+that end the program themselves (a control driver that kills it,
+`--present-test`) never get there, so give the engine's suite one run to
+`--max-ticks` over a schedule that reaches the engine's modules and expect
+exit code 3: the tick limit asks the engine to quit, as a machine's backend
+does at its limit, and the run then ends through the engine's own shutdown.
+
 ## 3. sys
 
 Replace the engine's frame wait, key queue, mouse state, quit and reset flags

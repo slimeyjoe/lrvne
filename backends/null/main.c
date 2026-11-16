@@ -10,6 +10,10 @@
  * once (an emergency quit, as a machine's backend does at its tick limit), leaves through its
  * own shutdown, and the exit code is 3.
  *
+ * When the engine returns, everything it allocated through the HAL must be freed
+ * (lrvne/app.h): what is left is printed ("memory: N bytes in M blocks not freed by the
+ * engine") and the exit code is 1.
+ *
  * What a run can leave behind:
  *   snapshots     the frames at the spec's snap: ticks, as lines on stdout (shot.h)
  *   pictures      --shot-every N writes every N-th frame as <--shot-dir>/shot_<tick>.ppm
@@ -331,7 +335,7 @@ static void i_flush(void)
 
 /* ---- memory and diagnostics --------------------------------------------------------------- */
 
-static size_t g_mem_now, g_mem_peak, g_mem_largest;
+static size_t g_mem_now, g_mem_peak, g_mem_largest, g_mem_blocks;
 static uint32_t g_mem_peak_tick;
 
 static void *m_alloc(size_t n, unsigned flags)
@@ -340,6 +344,7 @@ static void *m_alloc(size_t n, unsigned flags)
     (void)flags;
     if (p) {
         g_mem_now += n;
+        g_mem_blocks++;
         if (n > g_mem_largest)
             g_mem_largest = n;
         if (g_mem_now > g_mem_peak) {
@@ -352,9 +357,21 @@ static void *m_alloc(size_t n, unsigned flags)
 
 static void m_free(void *p, size_t n)
 {
-    if (p)
+    if (p) {
         g_mem_now -= n;
+        g_mem_blocks--;
+    }
     free(p);
+}
+
+/* the engine has returned: what it allocated through the HAL it has freed (lrvne/app.h) */
+static int mem_check(const struct lrv_app *app, int rc)
+{
+    if (!g_mem_now)
+        return rc;
+    fprintf(stderr, "%s: memory: %lu bytes in %lu blocks not freed by the engine\n",
+            app->name, (unsigned long)g_mem_now, (unsigned long)g_mem_blocks);
+    return 1;
 }
 
 static void mem_report(void)
@@ -538,7 +555,7 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
     if (g_render) {
         if (!g_args.cfg.audio_rate)
             g_args.cfg.audio_rate = DEFAULT_RATE;
-        return lrv_wav_render(app, &hal, &g_args.cfg, g_render, g_song, g_seconds);
+        return mem_check(app, lrv_wav_render(app, &hal, &g_args.cfg, g_render, g_song, g_seconds));
     }
     if (g_present_mode) {
         struct lrv_video_cfg vc;
@@ -552,6 +569,7 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
     rc = app->run(app->ctx, &hal, &g_args.cfg);
     if (g_out_of_ticks)
         rc = 3;
+    rc = mem_check(app, rc);
 
     lrv_autoplay_free(&g_ap);
     lrv_shot_free(&g_snap);

@@ -193,6 +193,10 @@ Everything is tested without a human and without game data.
   snapshots of chosen frames as JSON lines with their hash, pictures, the
   sound into a WAV file, the peak of the allocations. Two runs of the same
   input are the same tick for tick. `tests/smoke.sh` drives the demo this way.
+  `--max-ticks` ends a run as a machine's tick limit does, with an emergency
+  quit the engine leaves through its own shutdown (exit code 3); whenever
+  `run` returns, memory the engine allocated and did not free fails the run
+  (`tests/app_leak.c` is an engine that does not).
   A schedule can also follow the engine instead of the clock: `ok:wait`
   presses at every wait for the player's input, `snap:wait` takes a snapshot
   there, `waits:N` ends the run after N of them. Such a run compares with a

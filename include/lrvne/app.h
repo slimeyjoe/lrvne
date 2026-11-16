@@ -69,7 +69,9 @@ struct lrv_app {
     int host_pointer;           /* 1: the game draws no mouse pointer of its own, so the
                                  * host's stays visible over the picture */
 
-    /* Runs the game until it quits. Returns the process exit code. */
+    /* Runs the game until it quits. Returns the process exit code. Everything it allocated
+     * through the HAL is freed by the time it returns, also after an emergency quit (the
+     * headless backend fails a run that leaves memory behind). */
     int (*run)(void *ctx, const struct lrv_hal *hal, const struct lrv_run_cfg *cfg);
 
     /* optional, offline: plays song `name` for `seconds` through the sound path the game uses

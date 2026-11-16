@@ -3,19 +3,21 @@
 # Smoke test of the whole stack: runs the demo engine (examples/demo) built for the host target,
 # that is with the headless backend, and checks what it prints and leaves behind.
 #
-#   tests/smoke.sh build/host/lrvdemo
+#   tests/smoke.sh build/host/lrvdemo [build/host/tests/app_leak]
 #
 # Covered: the presentation test, scripted input with snapshots and pictures, storage, pack
 # discovery (--pak, <program>.pak, a pack appended to the program), the profile and a font in
 # the pack, the control protocol, the tick limit (the engine leaves through its own shutdown),
-# sound (offline, pushed and pulled), the command line's errors.
+# the backend's check that the engine freed what it allocated (with app_leak, an engine that
+# does not), sound (offline, pushed and pulled), the command line's errors.
 set -eu
 # bytes, not characters: BSD tr refuses binary input under a UTF-8 locale
 LC_ALL=C
 export LC_ALL
 
-exe=${1:?usage: smoke.sh PATH-TO-lrvdemo}
+exe=${1:?usage: smoke.sh PATH-TO-lrvdemo [PATH-TO-app_leak]}
 case "$exe" in /*) ;; *) exe=$PWD/$exe ;; esac
+leak=${2:-}
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/lrvne-smoke-XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
@@ -184,6 +186,19 @@ rc=0
 "$exe" --storage "$tmp/store" --max-ticks 50 >/dev/null 2>"$tmp/ticks.err" || rc=$?
 [ "$rc" -eq 3 ] || fail "--max-ticks: exit code $rc, not 3"
 grep -q 'max ticks reached' "$tmp/ticks.err" || fail "--max-ticks: no 'max ticks reached'"
+! grep -q 'not freed' "$tmp/ticks.err" || fail "--max-ticks: $(grep 'not freed' "$tmp/ticks.err")"
+# an engine that leaves memory behind fails the run, also when the tick limit ends it
+if [ -n "$leak" ]; then
+    case "$leak" in /*) ;; *) leak=$PWD/$leak ;; esac
+    for args in "--autoplay at:3=quit" "--max-ticks 5"; do
+        rc=0
+        # shellcheck disable=SC2086
+        "$leak" $args >/dev/null 2>"$tmp/leak.err" || rc=$?
+        [ "$rc" -eq 1 ] || fail "app_leak $args: exit code $rc, not 1"
+        grep -q '^app_leak: memory: 100 bytes in 1 blocks not freed by the engine$' \
+            "$tmp/leak.err" || fail "app_leak $args: $(cat "$tmp/leak.err")"
+    done
+fi
 # the light FM core renders at the rate asked for: 0.1 s at 44100 Hz, and it is not silence
 "$exe" --render-wav "$tmp/tune.wav" --song tune --seconds 0.1 --opn lite 2>/dev/null ||
     fail "--render-wav exited with $?"
