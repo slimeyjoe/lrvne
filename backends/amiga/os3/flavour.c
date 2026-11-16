@@ -49,8 +49,13 @@ int am_snap_capture(const struct am_snapinfo *si, const char *path)
  * start of a game; a stack that runs over goes on into whatever memory lies below it). vbcc's
  * startup code gives the program a stack of at least __stack bytes, allocating a new one and
  * swapping to it when it was started with less; core/main.c's high-water mark measures that
- * stack (the task's bounds, which StackSwap sets). */
-size_t __stack = 32768;
+ * stack (the task's bounds, which StackSwap sets). The size is the engine's Makefile's
+ * LRVNE_AMIGA_STACK (mk/target/amiga.mk, default 32 KB); an engine does not define __stack
+ * itself (the linker would refuse the second one). */
+#ifndef LRV_AMIGA_STACK
+#define LRV_AMIGA_STACK 32768
+#endif
+size_t __stack = LRV_AMIGA_STACK;
 
 int am_main_stack(int (*body)(void))
 {

@@ -30,6 +30,11 @@
 # A target without a C++ compiler or without a use for the protocol turns the switch off
 # whatever the engine's Makefile says (the Amiga family: mk/amiga.mk).
 #
+# Sizes:
+#
+#   LRVNE_AMIGA_STACK  the 68k program's least stack in bytes (default 32768; TARGET=amiga):
+#                      started with less (a shell gives 4 KB), it swaps to a stack this large
+#
 # Objects built in different ways never meet:
 #   - This file appends $(LRVNE_BUILD_SUFFIX) to BUILD. A target sets it for builds whose
 #     objects cannot be linked with the ordinary ones: "-san" with SAN=1 on the hosted targets,

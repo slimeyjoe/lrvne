@@ -30,8 +30,13 @@ LRVNE_TARGET_DEFS := -DLRV_OPN_ASM_68K
 LRVNE_EXTRA_SRCS  += $(LRVNE)/src/snd/opn_lite_68k.s
 endif
 
+# the least stack the program runs on (backends/amiga/os3/flavour.c __stack): a shell gives
+# 4 KB, an engine on lrvne needs more; an engine with deeper calls sets it higher
+LRVNE_AMIGA_STACK ?= 32768
+
 # -dontwarn=153: "statement has no effect" for every (void)parameter
-CFLAGS  := -c99 -cpu=$(CPU) $(OPT) -dontwarn=153 -DLRV_AMIGA_OS3 $(LRVNE_TARGET_DEFS)
+CFLAGS  := -c99 -cpu=$(CPU) $(OPT) -dontwarn=153 -DLRV_AMIGA_OS3 $(LRVNE_TARGET_DEFS) \
+           -DLRV_AMIGA_STACK=$(LRVNE_AMIGA_STACK)
 # -lmieee: software floating point (an engine's offline helpers may use double)
 LDLIBS  := -lamiga -lmieee
 

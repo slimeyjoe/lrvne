@@ -385,7 +385,8 @@ do the mixing; it is not written.
 * The main task of an engine in the demo's shape uses a few KB of stack, a
   game engine more (xenon: 6.8 KB). The program sees to its own: on the 68k
   vbcc's startup swaps to a stack of at least 32 KB when the shell (4 KB by
-  default) or the icon gave less (`os3/flavour.c` `__stack`), on AROS to
+  default) or the icon gave less (`os3/flavour.c` `__stack`; an engine that
+  needs more sets `LRVNE_AMIGA_STACK` in its Makefile), on AROS to
   256 KB (`aros/stack_aros.c`); WarpOS runs the engine on the PPC task's
   stack. The log's last lines give the high-water marks of both tasks.
 
