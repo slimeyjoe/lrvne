@@ -40,6 +40,14 @@ static double g_seconds = 30.0;
 
 /* ---- time --------------------------------------------------------------------------------- */
 
+/* the engine's input waits, for the autoplay words driven by them */
+static void autoplay_trace(const struct lrv_trace_event *ev)
+{
+    const struct lrv_app *app = lrv_sdl3.app;
+    if (ev->kind == LRV_TR_WAIT && (!app->wait_is_input || app->wait_is_input(ev->a0)))
+        lrv_autoplay_wait(&lrv_sdl3.autoplay, ev->a1 == 0);
+}
+
 static void frame_wait(void)
 {
     uint64_t now, frame_ns = lrv_sdl3.mode.frame_ns ? lrv_sdl3.mode.frame_ns : DEFAULT_FRAME_NS;
@@ -55,6 +63,8 @@ static void frame_wait(void)
         lrv_ctl_tick(lrv_sdl3.frames);
         return;
     }
+    if (lrv_sdl3.have_autoplay)
+        lrv_autoplay_end_tick(&lrv_sdl3.autoplay, lrv_sdl3.frames);
     if (lrv_sdl3.vsync && lrv_sdl3.mode.w)
         return;                         /* the present already waited for the host's refresh */
     now = SDL_GetTicksNS();
@@ -232,6 +242,8 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
         lrv_ctl_init(app);
         lrv_ctl_set_readback(lrv_sdl3_readback);
         hal.trace = lrv_ctl_trace;
+    } else if (lrv_sdl3.have_autoplay && lrv_autoplay_uses_waits(&lrv_sdl3.autoplay)) {
+        hal.trace = autoplay_trace;
     }
     if (g_args.cfg.audio_rate > 0) {    /* the voice needs the audio device */
         hal.aux_mode = LRV_AUX_CHANNEL;

@@ -469,6 +469,9 @@ No test of these targets needs a human or game data.
   `--present-test-mode pc98`), which are the reference.
 * **Scripted runs.** `AUTOPLAY=spec` plays an input schedule; its `snap:`
   ticks take snapshots. `FAST` drops the frame pacing, `MAXTICKS` ends a run.
+  `ok:wait snap:wait waits:N` follows the engine's input waits instead of the
+  ticks (`backends/common/autoplay.h`): for a run with real-time audio, whose
+  clips end on the device's clock, against the headless reference.
 * **Snapshots** (`core/snap.c`). For each one the program writes a request
   file to `SNAPDIR` with the frame's hash (`lrv_frame_hash32`, the number the
   headless backend prints) and where the displayed bitmap is in memory. On

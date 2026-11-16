@@ -469,10 +469,13 @@ static void t_frame_wait(void)
     am_frame_wait((am_opts.fast ? 0 : AM_F_WAIT) | AM_F_INPUT | AM_F_MEM);
     g_frames++;
     mem_note(am_fr->avail_chip, am_fr->avail_fast);
-    if (g_autoplay && lrv_autoplay_snap_due(&g_ap, g_frames)) {
-        char name[24];
-        snprintf(name, sizeof name, "t%lu", (unsigned long)g_frames);
-        am_snap(name, g_frames, g_snap_hash, g_snap_hash_tick == g_frames);
+    if (g_autoplay) {
+        lrv_autoplay_end_tick(&g_ap, g_frames);
+        if (lrv_autoplay_snap_due(&g_ap, g_frames)) {
+            char name[24];
+            lrv_autoplay_snap_name(&g_ap, g_frames, name, sizeof name);
+            am_snap(name, g_frames, g_snap_hash, g_snap_hash_tick == g_frames);
+        }
     }
     if (g_args.max_ticks > 0 && !g_out_of_ticks && (long)g_frames > g_args.max_ticks) {
         am_log("max ticks reached\n");
@@ -488,6 +491,13 @@ static void i_poll(struct lrv_input *in)
         lrv_autoplay_poll(&g_ap, g_frames, in);
     if (g_out_of_ticks)
         in->events |= LRV_EV_EMERGENCY;
+}
+
+/* the engine's input waits, for the autoplay words driven by them */
+static void autoplay_trace(const struct lrv_trace_event *ev)
+{
+    if (ev->kind == LRV_TR_WAIT && (!am_app->wait_is_input || am_app->wait_is_input(ev->a0)))
+        lrv_autoplay_wait(&g_ap, ev->a1 == 0);
 }
 
 static void i_flush(void)
@@ -732,9 +742,10 @@ static int run(void)
         if (lrv_autoplay_parse(&g_ap, g_args.autoplay, err, sizeof err) != LRV_OK)
             l_fatal(err);
         g_autoplay = 1;
-        am_log("autoplay: %d presses (first at %lu), %d held ranges, %d snapshots\n",
+        am_log("autoplay: %d presses (first at %lu), %d held ranges, %d snapshots%s\n",
                g_ap.at_count, (unsigned long)(g_ap.at_count ? g_ap.at[0].tick : 0),
-               g_ap.hold_count, g_ap.snap_count);
+               g_ap.hold_count, g_ap.snap_count,
+               lrv_autoplay_uses_waits(&g_ap) ? ", driven by the input waits" : "");
     }
 
     if (am_opts.audio && am_strieq(am_opts.audio, "none"))
@@ -786,6 +797,8 @@ static int run(void)
     hal.mem_free = m_free;
     hal.log = l_log;
     hal.fatal = l_fatal;
+    if (g_autoplay && lrv_autoplay_uses_waits(&g_ap))
+        hal.trace = autoplay_trace;
 
     if (am_opts.present_mode) {
         struct lrv_video_cfg vc;

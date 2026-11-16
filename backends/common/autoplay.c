@@ -163,11 +163,25 @@ static int parse_at(struct lrv_autoplay *ap, const char *p, const struct errbuf 
     return LRV_OK;
 }
 
+/* "wait" ending at a word end or a comma */
+static int is_wait(const char *p)
+{
+    return !strncmp(p, "wait", 4) && (at_end((unsigned char)p[4]) || p[4] == ',');
+}
+
 static int parse_snap(struct lrv_autoplay *ap, const char *p, const struct errbuf *e)
 {
     while (!at_end((unsigned char)*p)) {
         char *end;
-        uint32_t tick = (uint32_t)strtoul(p, &end, 10);
+        uint32_t tick;
+        if (is_wait(p)) {
+            ap->snap_wait = 1;
+            p += 4;
+            if (*p == ',')
+                p++;
+            continue;
+        }
+        tick = (uint32_t)strtoul(p, &end, 10);
         if (end == p)
             return fail(e, LRV_ERR_FORMAT, "expected a snap tick", p);
         if (grow(&ap->snap, ap->snap_count, sizeof *ap->snap) != LRV_OK)
@@ -196,6 +210,14 @@ static int parse_key_word(struct lrv_autoplay *ap, const char *w, size_t n,
         buttons = LRV_BTN_R;
     else if (!lrv_input_by_name(w, n, &key, &event) || event)
         return fail(e, LRV_ERR_FORMAT, "unknown word", w);
+    if (is_wait(p) && at_end((unsigned char)p[4])) {
+        if (buttons)
+            return fail(e, LRV_ERR_FORMAT, "a button cannot be pressed at waits", w);
+        if (ap->wait_nkeys >= LRV_AUTOPLAY_CHORD)
+            return fail(e, LRV_ERR_FORMAT, "too many keys at waits", w);
+        ap->wait_keys[ap->wait_nkeys++] = (uint8_t)key;
+        return LRV_OK;
+    }
     for (i = 0; !at_end((unsigned char)p[i]); i++)
         if (p[i] == '-')
             ranges = 1;
@@ -258,6 +280,13 @@ static int parse_spec(struct lrv_autoplay *ap, const char *s, const struct errbu
             rc = parse_snap(ap, s + 5, e);
         else if (colon == 4 && !strncmp(s, "rand", 4)) {
             ap->rnd = (unsigned)strtoul(s + 5, 0, 10) | 1u;
+            rc = LRV_OK;
+        } else if (colon == 5 && !strncmp(s, "waits", 5)) {
+            char *end;
+            unsigned long n = strtoul(s + 6, &end, 10);
+            if (end == s + 6 || !at_end((unsigned char)*end) || n == 0)
+                return fail(e, LRV_ERR_FORMAT, "expected waits:N", s);
+            ap->waits_limit = (uint32_t)n;
             rc = LRV_OK;
         } else {
             rc = parse_key_word(ap, s, colon, e);
@@ -377,15 +406,58 @@ void lrv_autoplay_poll(struct lrv_autoplay *ap, uint32_t tick, struct lrv_input 
             if (tick % ap->every[i].every == 0)
                 press(in, ap->every[i].key);
     }
+    if (ap->waits_limit && ap->waits_done >= ap->waits_limit) {
+        in->events |= LRV_EV_EMERGENCY;         /* the run is over: no more presses */
+        ap->press_due = 0;
+    } else if (ap->press_due) {
+        for (k = 0; k < ap->wait_nkeys; k++)
+            press(in, ap->wait_keys[k]);
+        ap->press_due = 0;
+    }
 }
 
 void lrv_autoplay_flush(struct lrv_autoplay *ap, uint32_t tick)
 {
     while (ap->at_next < ap->at_count && ap->at[ap->at_next].tick <= tick)
         ap->kept |= ap->at[ap->at_next++].events & LRV_EV_STICKY;
+    ap->press_due = 0;                          /* type-ahead, as the control protocol drops it */
 }
 
-int lrv_autoplay_snap_due(const struct lrv_autoplay *ap, uint32_t tick)
+/* ---- input waits -------------------------------------------------------------------------- */
+
+int lrv_autoplay_uses_waits(const struct lrv_autoplay *ap)
+{
+    return ap->wait_nkeys || ap->snap_wait || ap->waits_limit;
+}
+
+void lrv_autoplay_wait(struct lrv_autoplay *ap, int enter)
+{
+    ap->in_wait = enter != 0;
+    ap->wait_ticks = 0;
+}
+
+/* A wait's point is the end of the first whole tick inside it: the second tick end after the
+ * enter (the first ends the tick the engine entered it in, after whatever it drew before). */
+void lrv_autoplay_end_tick(struct lrv_autoplay *ap, uint32_t tick)
+{
+    ap->ended_tick = tick;
+    ap->point = 0;
+    if (ap->in_wait && ++ap->wait_ticks == 2) {
+        ap->point = 1;
+        ap->waits_done++;
+        ap->press_due = ap->wait_nkeys > 0;
+    }
+}
+
+/* the end of `tick` is (or, asked during it, will be) a wait's point */
+static int wait_point(const struct lrv_autoplay *ap, uint32_t tick)
+{
+    if (tick == ap->ended_tick)
+        return ap->point;
+    return tick == ap->ended_tick + 1 && ap->in_wait && ap->wait_ticks == 1;
+}
+
+static int in_snap_list(const struct lrv_autoplay *ap, uint32_t tick)
 {
     int lo = 0, hi = ap->snap_count;
     while (lo < hi) {
@@ -398,6 +470,19 @@ int lrv_autoplay_snap_due(const struct lrv_autoplay *ap, uint32_t tick)
             hi = mid;
     }
     return 0;
+}
+
+int lrv_autoplay_snap_due(const struct lrv_autoplay *ap, uint32_t tick)
+{
+    return in_snap_list(ap, tick) || (ap->snap_wait && wait_point(ap, tick));
+}
+
+void lrv_autoplay_snap_name(const struct lrv_autoplay *ap, uint32_t tick, char *buf, size_t len)
+{
+    if (in_snap_list(ap, tick) || !ap->snap_wait || !wait_point(ap, tick))
+        snprintf(buf, len, "t%lu", (unsigned long)tick);
+    else
+        snprintf(buf, len, "w%lu", (unsigned long)(ap->waits_done + (tick != ap->ended_tick)));
 }
 
 uint32_t lrv_autoplay_last_tick(const struct lrv_autoplay *ap)

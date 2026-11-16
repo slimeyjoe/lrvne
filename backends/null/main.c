@@ -57,7 +57,7 @@ static long g_max_ticks = DEFAULT_MAX_TICKS;
 static uint32_t g_tick;
 static struct lrv_video_mode g_mode;
 static struct lrv_autoplay g_ap;
-static struct lrv_shot g_snap;          /* the last frame, while snap: ticks are pending */
+static struct lrv_shot g_snap;          /* the last frame, when the spec takes snapshots */
 
 /* the backend's options */
 static int g_shot_every;
@@ -126,7 +126,7 @@ static void v_present(const struct lrv_frame *frame)
 {
     if (g_control)
         lrv_ctl_present(frame);
-    else if (g_ap.snap_count)
+    else if (g_ap.snap_count || g_ap.snap_wait)
         lrv_shot_capture(&g_snap, frame);
     if (g_shot_every && g_tick % (uint32_t)g_shot_every == 0) {
         char path[LRV_PATH_MAX];
@@ -287,11 +287,21 @@ static void t_frame_wait(void)
     }
     if (g_control) {
         lrv_ctl_tick(g_tick);
-    } else if (g_snap.valid && lrv_autoplay_snap_due(&g_ap, g_tick)) {
+        return;
+    }
+    lrv_autoplay_end_tick(&g_ap, g_tick);
+    if (g_snap.valid && lrv_autoplay_snap_due(&g_ap, g_tick)) {
         char name[24];
-        snprintf(name, sizeof name, "t%lu", (unsigned long)g_tick);
+        lrv_autoplay_snap_name(&g_ap, g_tick, name, sizeof name);
         lrv_shot_emit_snap(stdout, &g_snap.frame, name, g_tick);
     }
+}
+
+/* the engine's input waits, for the autoplay words driven by them */
+static void autoplay_trace(const struct lrv_trace_event *ev)
+{
+    if (ev->kind == LRV_TR_WAIT && (!g_app->wait_is_input || g_app->wait_is_input(ev->a0)))
+        lrv_autoplay_wait(&g_ap, ev->a1 == 0);
 }
 
 static void i_poll(struct lrv_input *in)
@@ -512,6 +522,8 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
     if (g_control) {
         lrv_ctl_init(app);
         hal.trace = lrv_ctl_trace;
+    } else if (lrv_autoplay_uses_waits(&g_ap)) {
+        hal.trace = autoplay_trace;
     }
     if (g_memstat)
         atexit(mem_report);

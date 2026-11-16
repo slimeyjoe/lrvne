@@ -68,6 +68,17 @@ for t in 00000000 00000010 00000020; do
     [ "$(wc -c <"$f")" -eq 768015 ] || fail "picture $f: size"
 done
 [ "$(bytes_of "$tmp/store/runs")" = "1 0 0 0" ] || fail "storage: first run"
+
+# ... driven by the engine's input waits: the demo's one wait, its snapshot w1 at the end of
+# its first whole tick (tick 2), then the run ends (waits:1); the same frame as a snap:2 run
+"$exe" --storage "$tmp/store-w" --autoplay "snap:wait waits:1" >"$tmp/waits" 2>/dev/null ||
+    fail "waits:1 run exited with $?"
+"$exe" --storage "$tmp/store-w" --autoplay "snap:2" --max-ticks 3 >"$tmp/tick2" 2>/dev/null ||
+    [ $? -eq 3 ] || fail "snap:2 run did not end at --max-ticks"
+[ "$(wc -l <"$tmp/waits")" -eq 1 ] && grep -q '"name":"w1","t":2,' "$tmp/waits" ||
+    fail "snap:wait: not one snapshot w1 at tick 2"
+[ "$(hash_of "$tmp/waits" w1)" = "$(hash_of "$tmp/tick2" t2)" ] ||
+    fail "snap:wait: w1 is not the frame of tick 2"
 # the same input again: the same frames, and the record counts the second run
 run_demo "$tmp/run2"
 [ "$(hash_of "$tmp/run1" t20)" = "$(hash_of "$tmp/run2" t20)" ] || fail "runs differ"

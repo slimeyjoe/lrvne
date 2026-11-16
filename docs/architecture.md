@@ -193,6 +193,11 @@ Everything is tested without a human and without game data.
   snapshots of chosen frames as JSON lines with their hash, pictures, the
   sound into a WAV file, the peak of the allocations. Two runs of the same
   input are the same tick for tick. `tests/smoke.sh` drives the demo this way.
+  A schedule can also follow the engine instead of the clock: `ok:wait`
+  presses at every wait for the player's input, `snap:wait` takes a snapshot
+  there, `waits:N` ends the run after N of them. Such a run compares with a
+  machine whose clock differs (an emulator, audio that ends on its own
+  device's time) snapshot for snapshot, since nothing in it counts ticks.
 - **The presentation test** (`--present-test`, `backends/common/ptest.h`) is a
   fixed sequence of presents through every path of a `video_present`. Its
   snapshot hashes are the reference for a backend with a real display: the

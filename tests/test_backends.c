@@ -311,6 +311,59 @@ static void test_autoplay(void)
         lrv_autoplay_free(&other);
     }
 
+    /* driven by the input waits: a wait's point is the end of its first whole tick, the
+     * snapshot is taken there, the press goes out at the next poll, waits:N ends the run */
+    {
+        char name[16];
+        CHECK(lrv_autoplay_parse(&ap, "ok:wait snap:30,wait a:wait waits:2", err, sizeof err) ==
+              LRV_OK);
+        CHECK(lrv_autoplay_uses_waits(&ap) && ap.wait_nkeys == 2 && ap.snap_count == 1);
+        lrv_autoplay_end_tick(&ap, 1);
+        poll_at(&ap, 2, &in);
+        CHECK(in.nkeys == 0 && !lrv_autoplay_snap_due(&ap, 2));     /* no wait yet */
+        lrv_autoplay_wait(&ap, 1);                  /* entered during tick 2 */
+        CHECK(!lrv_autoplay_snap_due(&ap, 2));     /* its tick is not a whole one */
+        lrv_autoplay_end_tick(&ap, 2);
+        CHECK(!lrv_autoplay_snap_due(&ap, 2));
+        poll_at(&ap, 3, &in);
+        CHECK(in.nkeys == 0);                       /* nothing before the point */
+        CHECK(lrv_autoplay_snap_due(&ap, 3));      /* asked during tick 3: it will be */
+        lrv_autoplay_snap_name(&ap, 3, name, sizeof name);
+        CHECK(!strcmp(name, "w1"));
+        lrv_autoplay_end_tick(&ap, 3);
+        CHECK(lrv_autoplay_snap_due(&ap, 3));
+        lrv_autoplay_snap_name(&ap, 3, name, sizeof name);
+        CHECK(!strcmp(name, "w1"));
+        poll_at(&ap, 4, &in);
+        CHECK(in.nkeys == 2 && in.keys[0].key == LRV_K_RETURN && in.keys[1].key == LRV_K_A);
+        poll_at(&ap, 4, &in);
+        CHECK(in.nkeys == 0);                       /* once per wait */
+        lrv_autoplay_end_tick(&ap, 4);
+        CHECK(!lrv_autoplay_snap_due(&ap, 4) && !lrv_autoplay_snap_due(&ap, 5));
+        lrv_autoplay_wait(&ap, 0);
+        /* a wait that is not an input wait never reaches here; one the flush empties gets no
+         * press (type-ahead), as in the control protocol */
+        lrv_autoplay_wait(&ap, 1);
+        lrv_autoplay_end_tick(&ap, 5);
+        lrv_autoplay_end_tick(&ap, 6);
+        lrv_autoplay_flush(&ap, 7);
+        poll_at(&ap, 7, &in);
+        CHECK(in.nkeys == 0 && in.events == LRV_EV_EMERGENCY);  /* waits:2 reached */
+        lrv_autoplay_snap_name(&ap, 6, name, sizeof name);
+        CHECK(!strcmp(name, "w2"));
+        lrv_autoplay_snap_name(&ap, 30, name, sizeof name);
+        CHECK(!strcmp(name, "t30") && lrv_autoplay_snap_due(&ap, 30));
+        poll_at(&ap, 8, &in);
+        CHECK(in.events == LRV_EV_EMERGENCY);      /* at every poll from then on */
+        lrv_autoplay_free(&ap);
+        CHECK(lrv_autoplay_parse(&ap, "ok:30", err, sizeof err) == LRV_OK);
+        CHECK(!lrv_autoplay_uses_waits(&ap));
+        lrv_autoplay_free(&ap);
+        CHECK(lrv_autoplay_parse(&ap, "waits:0", err, sizeof err) == LRV_ERR_FORMAT);
+        CHECK(lrv_autoplay_parse(&ap, "button_l:wait", err, sizeof err) == LRV_ERR_FORMAT);
+        CHECK(lrv_autoplay_parse(&ap, "snap:wai", err, sizeof err) == LRV_ERR_FORMAT);
+    }
+
     /* what is wrong is said, and nothing is left allocated (the sanitizer checks) */
     CHECK(lrv_autoplay_parse(&ap, "at:5=a,6=stop", err, sizeof err) == LRV_ERR_FORMAT);
     CHECK(!strcmp(err, "autoplay: unknown key: stop"));

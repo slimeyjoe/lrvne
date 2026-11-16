@@ -11,6 +11,18 @@
  *   rand:SEED            a random press of return, up, down or esc every 20 ticks
  *   snap:T,T,..          ticks at which the backend takes a snapshot (lrv_autoplay_snap_due)
  *
+ * Words driven by the engine's input waits instead of ticks (the LRV_TR_WAIT events of the
+ * kinds lrv_app.wait_is_input accepts, the waits the control protocol stops at). A run
+ * driven by them does not depend on how long anything took: a wait's point is the end of
+ * the first whole tick the engine spends in it, whatever tick that is.
+ *   KEY:wait             press KEY once per input wait, at the first poll after its point
+ *                        (several KEY:wait words press their keys in the order written)
+ *   snap:wait            a snapshot at each input wait's point, named w1, w2, ..
+ *   waits:N              after the N-th input wait's point, an emergency quit at every poll
+ *                        (the engine shuts down normally; MAXTICKS stays the backstop)
+ * The backend feeds the waits in (lrv_autoplay_wait) when lrv_autoplay_uses_waits says so,
+ * and calls lrv_autoplay_end_tick at the end of every tick before asking for snapshots.
+ *
  * KEY is a key name of lrvne/input.h ("return", "esc", "kp8", "f1", "a", ...), or "ok" for
  * return and "cancel" for esc. In an at: entry it may also be an event: quit, emergency, reset,
  * mouse_l, mouse_r (a click).
@@ -60,6 +72,17 @@ struct lrv_autoplay {
     uint32_t last_tick;                 /* periodic presses are delivered once per tick */
     int polled;
     uint32_t kept;                      /* sticky events of entries a flush dropped */
+    /* the words driven by input waits */
+    uint8_t wait_keys[LRV_AUTOPLAY_CHORD];
+    int wait_nkeys;
+    int snap_wait;                      /* snap:wait */
+    uint32_t waits_limit;               /* waits:N, 0 = none */
+    int in_wait;                        /* the engine is in an input wait */
+    int wait_ticks;                     /* tick ends since it was entered */
+    uint32_t ended_tick;                /* the last tick lrv_autoplay_end_tick saw */
+    int point;                          /* ended_tick was a wait's point */
+    uint32_t waits_done;                /* points so far: the last one's snapshot is w<waits_done> */
+    int press_due;                      /* the wait keys go out at the next poll */
 };
 
 /* The key or the event of a name of `len` characters, as specs and protocol commands spell
@@ -79,8 +102,17 @@ void lrv_autoplay_free(struct lrv_autoplay *ap);
 void lrv_autoplay_poll(struct lrv_autoplay *ap, uint32_t tick, struct lrv_input *in);
 /* input_flush: drops the presses due at `tick`; their sticky events go to the next poll. */
 void lrv_autoplay_flush(struct lrv_autoplay *ap, uint32_t tick);
-/* 1 when `tick` is in the snap: list. */
+/* 1 when the spec has words driven by input waits (the backend then feeds them in). */
+int lrv_autoplay_uses_waits(const struct lrv_autoplay *ap);
+/* The engine entered (enter = 1) or left an input wait. */
+void lrv_autoplay_wait(struct lrv_autoplay *ap, int enter);
+/* The end of `tick` (every tick, before lrv_autoplay_snap_due for it). */
+void lrv_autoplay_end_tick(struct lrv_autoplay *ap, uint32_t tick);
+/* 1 when the end of `tick` takes a snapshot: it is in the snap: list, or it is (or, asked
+ * during that tick, will be) an input wait's point with snap:wait. */
 int lrv_autoplay_snap_due(const struct lrv_autoplay *ap, uint32_t tick);
+/* The snapshot's name at `tick`: t<tick> for a snap: tick, else w<k> for the k-th wait. */
+void lrv_autoplay_snap_name(const struct lrv_autoplay *ap, uint32_t tick, char *buf, size_t len);
 /* The last tick of the at:, held and snap: lists (0 when they are empty). */
 uint32_t lrv_autoplay_last_tick(const struct lrv_autoplay *ap);
 
