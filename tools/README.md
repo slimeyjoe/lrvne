@@ -18,6 +18,7 @@ files make up a game, and what they are, is an engine's inventory and an engine'
 | `profile` | the game profile text of `include/lrvne/profile.h` |
 | `xfont` | BDF/PCF bitmap fonts to XFNT glyph tables |
 | `voicepack` | the voice pack: clips, the `voice` description, optional Opus transcoding |
+| `pmd` | PMD 4.7g data for the PMD module: the SSG-effect table out of a player's PMD.COM; the test songs |
 
 Each module's docstring is its reference: formats, API, command line.
 
