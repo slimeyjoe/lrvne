@@ -12,8 +12,9 @@
 #                                   emulated 68040 (tests/opn68k.sh says what it needs)
 #   make clean
 #
-# Switches (0/1, see mk/lrvne.mk): LRVNE_YMFM, LRVNE_OPUS, LRVNE_CONTROL. Changing one rebuilds
-# what depends on it.
+# Switches (0/1, see mk/lrvne.mk): LRVNE_YMFM, LRVNE_OPUS, LRVNE_PMD, LRVNE_CONTROL. Changing one
+# rebuilds what depends on it. Here LRVNE_PMD is on unless switched off, so that the tests cover
+# the module (engines have it off unless they switch it on).
 #
 # Engines do not use this file: they include mk/lrvne.mk (see there).
 
@@ -23,6 +24,8 @@ BUILD    := build/$(TARGET)
 APP_NAME := lrvdemo
 APP_SRCS := $(sort $(wildcard examples/demo/*.c))
 APP_INCLUDES := -Iexamples/demo
+
+LRVNE_PMD ?= 1
 
 .DEFAULT_GOAL := all
 include mk/lrvne.mk

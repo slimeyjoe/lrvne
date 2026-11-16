@@ -2,7 +2,8 @@
 # Builds and tests lrvne on every push and pull request.
 #
 #   host    the headless backend: unit tests and the smoke test under the sanitizers, with
-#           and without the ymfm core, and a build with the Opus decoder; Linux and macOS
+#           and without the ymfm core, a build with the Opus decoder and one without the PMD
+#           module (lrvne's Makefile builds it unless told not to); Linux and macOS
 #   sdl3    the SDL3 backend. Built on macOS only, with Homebrew's SDL3: the Ubuntu runner
 #           image (24.04) has no SDL3 package. Move it into a matrix with ubuntu-latest once
 #           that image is a release that ships libsdl3-dev.
@@ -39,6 +40,8 @@ jobs:
         run: make -j4 test SAN=1 LRVNE_YMFM=${{ matrix.ymfm }}
       - name: Test with the Opus decoder
         run: make -j4 test LRVNE_OPUS=1 LRVNE_YMFM=${{ matrix.ymfm }}
+      - name: Test without the PMD module
+        run: make -j4 test LRVNE_PMD=0 LRVNE_YMFM=${{ matrix.ymfm }}
 
   sdl3:
     runs-on: macos-latest
@@ -51,7 +54,7 @@ jobs:
       - name: Build
         run: make -j4 TARGET=sdl3
       - name: Build with every switch
-        run: make -j4 TARGET=sdl3 LRVNE_OPUS=1 LRVNE_YMFM=0 LRVNE_CONTROL=0
+        run: make -j4 TARGET=sdl3 LRVNE_OPUS=1 LRVNE_YMFM=0 LRVNE_CONTROL=0 LRVNE_PMD=0
 
   checks:
     runs-on: ubuntu-latest

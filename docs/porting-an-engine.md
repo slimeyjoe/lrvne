@@ -29,7 +29,7 @@ all: $(EXE)
 
 Use `$(BUILD)` and `$(EXE)` only after the include (a sanitizer build gets a
 directory of its own). Choose the switches the engine needs (`LRVNE_YMFM`,
-`LRVNE_OPUS`, `LRVNE_CONTROL`). The same Makefile builds the engine for every
+`LRVNE_OPUS`, `LRVNE_PMD`, `LRVNE_CONTROL`). The same Makefile builds the engine for every
 target of `mk/target/`: `make TARGET=amiga` (or `warpos`, `aros`) needs only
 the cross toolchain; `backends/amiga/README.md` says what an engine should
 check for it and how its release archives are made. Remove the old layer's sources from `APP_SRCS`

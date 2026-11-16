@@ -25,6 +25,7 @@
 #
 #   LRVNE_YMFM     the ymfm YM2203 core (C++); the C core is always there
 #   LRVNE_OPUS     the Opus decoder for voice clips
+#   LRVNE_PMD      the PMD music driver (lrvne/pmd.h), for an engine whose game plays PMD songs
 #   LRVNE_CONTROL  the test automation protocol in the backend
 #
 # A target without a C++ compiler or without a use for the protocol turns the switch off
@@ -64,6 +65,7 @@ TARGET        ?= host
 BUILD         ?= build/$(TARGET)
 LRVNE_YMFM    ?= 1
 LRVNE_OPUS    ?= 0
+LRVNE_PMD     ?= 0
 LRVNE_CONTROL ?= 1
 
 ifeq ($(V),1)
@@ -81,7 +83,10 @@ include $(LRVNE)/mk/target/$(TARGET).mk
 BUILD := $(BUILD)$(LRVNE_BUILD_SUFFIX)
 
 # ---- sources --------------------------------------------------------------------------------
-LRVNE_LIB_SRCS := $(sort $(wildcard $(LRVNE)/src/*/*.c $(LRVNE)/src/*/*/*.c))
+# optional modules: in src/ with the rest, compiled only when switched on
+LRVNE_PMD_SRCS := $(LRVNE)/src/snd/pmd.c
+LRVNE_LIB_SRCS := $(filter-out $(LRVNE_PMD_SRCS), \
+                    $(sort $(wildcard $(LRVNE)/src/*/*.c $(LRVNE)/src/*/*/*.c)))
 LRVNE_CXX_SRCS :=
 LRVNE_DEFS     :=
 ifeq ($(LRVNE_YMFM),1)
@@ -91,6 +96,10 @@ endif
 ifeq ($(LRVNE_OPUS),1)
 include $(LRVNE)/mk/opus.mk
 LRVNE_DEFS     += -DLRV_HAVE_OPUS
+endif
+ifeq ($(LRVNE_PMD),1)
+LRVNE_LIB_SRCS += $(LRVNE_PMD_SRCS)
+LRVNE_DEFS     += -DLRV_HAVE_PMD
 endif
 
 LRVNE_BACKEND_SRCS := $(sort $(foreach d,$(LRVNE_BACKEND_DIRS) $(LRVNE)/backends/common,$(wildcard $(d)/*.c)))

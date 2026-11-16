@@ -34,7 +34,7 @@ on it adds the interpreter and formats of one original engine; a game is then a
 | `src/pack`, `src/profile` | the asset pack reader (languages, entries read in ranges) and the game profile parser |
 | `src/gfx` | `screen`: pages, dirty rectangles, palette, overlays, presentation; palette fades, the frame hash; planar-to-chunky conversion and integer scaling for backends |
 | `src/text` | glyph tables, Shift-JIS and UTF-8, glyph cells into planar pages, reflow of translated text |
-| `src/snd` | the OPN (YM2203) cores, the register-write queue that runs a music driver in sample time, the mixer (push and pull delivery), the music path assembled from them, the voice clip player |
+| `src/snd` | the OPN (YM2203) cores, the register-write queue that runs a music driver in sample time, the mixer (push and pull delivery), the music path assembled from them, the voice clip player; PMD 4.7g, an optional music driver ([its document](docs/pmd.md)) |
 | `src/codec` | LZSS; the voice clip decoders (8-bit PCM, delta codes, Opus) |
 | `src/machine/pc98` | the PC-98: its video mode and its keyboard as the originals read it |
 | `backends/` | `null` (headless and deterministic, for tests), `sdl3` (the player), `amiga` (AmigaOS 3.x on the 68k, WarpOS, AROS: [its README](backends/amiga/README.md)); `common` is what they share (command line, pack and storage paths, scripted input, snapshots), `control` the test automation protocol |
@@ -42,7 +42,7 @@ on it adds the interpreter and formats of one original engine; a game is then a
 | `tools/` | Python: the pack and font builders, readers of disk and CD images |
 | `rigs/` | the Amiga family's programs on emulated machines (WinUAE, WarpOS, hosted AROS) against the headless build: [its README](rigs/README.md) |
 | `fonts/`, `third_party/` | the bitmap fonts the glyph tables are built from; ymfm and the Opus decoder |
-| `docs/` | [the architecture](docs/architecture.md), [porting an engine onto lrvne](docs/porting-an-engine.md) |
+| `docs/` | [the architecture](docs/architecture.md), [porting an engine onto lrvne](docs/porting-an-engine.md), [the PMD module](docs/pmd.md) |
 
 ## Using it in an engine
 
@@ -89,6 +89,7 @@ Build switches (`0` or `1`; changing one rebuilds what depends on it):
 |---|---|---|
 | `LRVNE_YMFM` | 1 | the ymfm YM2203 core (C++); the light C core is always built. Off on the Amiga targets |
 | `LRVNE_OPUS` | 0 | the Opus decoder for voice clips (vendored libopus, decoder only) |
+| `LRVNE_PMD` | 0 | the PMD 4.7g music driver ([docs/pmd.md](docs/pmd.md)); lrvne's own Makefile turns it on for its tests |
 | `LRVNE_CONTROL` | 1 | the test automation protocol (`--control`) in the backends. Off on the Amiga targets |
 | `SAN` | 0 | sanitizers, on the hosted targets; objects go to `build/<target>-san` |
 
