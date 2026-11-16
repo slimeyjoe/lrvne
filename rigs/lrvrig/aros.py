@@ -113,8 +113,10 @@ def compare(ref, reqs, snapdir, label, key=lambda q: q.get('name')):
             continue
         exp = frame.rgb_bytes()
         if px != exp:
-            n = sum(1 for i in range(0, len(exp), 3) if px[i:i + 3] != exp[i:i + 3])
-            bad.append('%s %s: %d pixels differ' % (label, q.get('name'), n))
+            diff = [i for i in range(0, len(exp), 3) if px[i:i + 3] != exp[i:i + 3]]
+            y, x = divmod(diff[0] // 3, W)
+            bad.append('%s %s: %d pixels differ, the first at x %d y %d' % (
+                label, q.get('name'), len(diff), x, y))
     missing = sorted(k for k in ref if k not in seen)
     if missing:
         bad.append('%s: %d of %d snapshots missing (%s%s)' % (label, len(missing), len(ref),

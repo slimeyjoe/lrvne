@@ -60,7 +60,8 @@ class RigTest(unittest.TestCase):
         self.put('snap_a.ppm', b'P6\n640 400\n255\n' + bytes(px))
         self.put('snap_a.req', b'name=a hash=12345678 image=snap_a.ppm\n')
         bad = aros.compare({'a': f}, aros.requests(self.dir), self.dir, 'x')
-        self.assertEqual(bad, ['x a: hash 12345678, reference 0000abcd', 'x a: 1 pixels differ'])
+        self.assertEqual(bad, ['x a: hash 12345678, reference 0000abcd',
+                               'x a: 1 pixels differ, the first at x 1 y 0'])
         # no picture
         self.put('snap_a.req', b'name=a hash=0000abcd\n')
         bad = aros.compare({'a': f}, aros.requests(self.dir), self.dir, 'x')
