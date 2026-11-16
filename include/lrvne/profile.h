@@ -81,6 +81,18 @@ struct lrv_pack;
 int lrv_profile_load(const struct lrv_pack *pk, const struct lrv_pfield *fields, int nfields,
                      void *dst);
 
+/* One key of key=value text in the syntax of a profile (values trimmed, blank lines and '#'
+ * comments skipped, CR LF read as LF; of a key given twice the last counts), for the META
+ * entries that are not a profile and the few keys an engine reads without a field table.
+ * Copies the value into buf (cap bytes, NUL terminated); buf may be NULL to test for the key.
+ * Returns LRV_OK, LRV_ERR_NOTFOUND, LRV_ERR_RANGE when the value does not fit (buf is then
+ * empty). Unlike a profile, other keys are not an error. */
+int lrv_meta_get(const uint8_t *text, size_t len, const char *key, char *buf, size_t cap);
+/* The same for the pack's META entry `entry`: loads it, looks the key up, frees it. Also
+ * LRV_ERR_NOTFOUND when there is no such entry, LRV_ERR_IO when it cannot be read. */
+int lrv_pack_meta_get(const struct lrv_pack *pk, const char *entry, const char *key, char *buf,
+                      size_t cap);
+
 /* 1 when `name` is an element of the comma-separated list (spaces around elements ignored). */
 int lrv_list_has(const char *list, const char *name);
 

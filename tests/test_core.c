@@ -190,6 +190,48 @@ static void test_profile_pack(void)
     th_pack_end(&b, LRV_PACK_MAIN);
     CHECK(lrv_pack_open(&pk, &hal, LRV_PACK_MAIN) == LRV_OK);
     CHECK(lrv_profile_load(&pk, fields, NFIELDS, &p) == LRV_ERR_NOTFOUND);
+    CHECK(lrv_pack_meta_get(&pk, "lang", "encoding", 0, 0) == LRV_ERR_NOTFOUND);
+    lrv_pack_close(&pk);
+    CHECK(th_live == 0);
+}
+
+static void test_meta(void)
+{
+    static const char text[] =
+        "# settings\r\n"
+        "encoding = utf-8 \r\n"
+        "\n"
+        "wrap=word\n"
+        "note\n"
+        "voicemap=a1b2=c3\n"
+        "wrap=kinsoku";
+    static struct th_builder b;
+    const uint8_t *t = (const uint8_t *)text;
+    struct lrv_hal hal;
+    struct lrv_pack pk;
+    char v[16], tiny[4];
+
+    CHECK(lrv_meta_get(t, strlen(text), "encoding", v, sizeof v) == LRV_OK);
+    CHECK(!strcmp(v, "utf-8"));
+    CHECK(lrv_meta_get(t, strlen(text), "wrap", v, sizeof v) == LRV_OK && !strcmp(v, "kinsoku"));
+    CHECK(lrv_meta_get(t, strlen(text), "voicemap", v, sizeof v) == LRV_OK);
+    CHECK(!strcmp(v, "a1b2=c3"));
+    CHECK(lrv_meta_get(t, strlen(text), "voicemap", 0, 0) == LRV_OK);
+    CHECK(lrv_meta_get(t, strlen(text), "note", v, sizeof v) == LRV_ERR_NOTFOUND && !v[0]);
+    CHECK(lrv_meta_get(t, strlen(text), "# settings", v, sizeof v) == LRV_ERR_NOTFOUND);
+    CHECK(lrv_meta_get(t, strlen(text), "enc", v, sizeof v) == LRV_ERR_NOTFOUND);
+    CHECK(lrv_meta_get(t, strlen(text), "wrap", tiny, sizeof tiny) == LRV_ERR_RANGE && !tiny[0]);
+    CHECK(lrv_meta_get(t, 0, "wrap", v, sizeof v) == LRV_ERR_NOTFOUND);
+
+    th_hal(&hal);
+    th_pack_begin(&b, 1);
+    th_pack_add(&b, "lang", LRV_PT_META, 0, text, (uint32_t)strlen(text));
+    th_pack_end(&b, LRV_PACK_MAIN);
+    CHECK(lrv_pack_open(&pk, &hal, LRV_PACK_MAIN) == LRV_OK);
+    CHECK(lrv_pack_meta_get(&pk, "lang", "encoding", v, sizeof v) == LRV_OK);
+    CHECK(!strcmp(v, "utf-8"));
+    CHECK(lrv_pack_meta_get(&pk, "lang", "missing", v, sizeof v) == LRV_ERR_NOTFOUND);
+    CHECK(lrv_pack_meta_get(&pk, "meta", "encoding", v, sizeof v) == LRV_ERR_NOTFOUND);
     lrv_pack_close(&pk);
     CHECK(th_live == 0);
 }
@@ -439,6 +481,7 @@ int main(void)
     test_pack();
     test_profile();
     test_profile_pack();
+    test_meta();
     test_sys();
     test_trace();
     test_motion();

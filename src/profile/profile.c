@@ -108,45 +108,64 @@ static const char *store(const struct lrv_pfield *f, void *dst, const uint8_t *v
     }
 }
 
+/* One line of key=value text: the key and the value trimmed. */
+struct kv_line {
+    const uint8_t *k, *v;
+    size_t kn, vn;
+    int has_eq;
+};
+
+/* The next line that is not blank or a comment, from text[*i]; *line counts every line. 0 at
+ * the end of the text. Profiles and lrv_meta_get read the same syntax through this. */
+static int next_line(const uint8_t *text, size_t len, size_t *i, int *line, struct kv_line *l)
+{
+    while (*i < len) {
+        const uint8_t *s = text + *i;
+        size_t n = 0;
+        while (*i + n < len && s[n] != '\n')
+            n++;
+        *i += n + 1;
+        (*line)++;
+        l->k = s;
+        l->kn = 0;
+        while (l->kn < n && s[l->kn] != '=')
+            l->kn++;
+        l->v = s + l->kn + 1;
+        l->has_eq = l->kn < n;
+        l->vn = l->has_eq ? n - l->kn - 1 : 0;
+        trim(&l->k, &l->kn);
+        if (l->kn == 0 && l->vn == 0)
+            continue;                           /* blank */
+        if (l->k[0] == '#')
+            continue;
+        trim(&l->v, &l->vn);
+        return 1;
+    }
+    return 0;
+}
+
 int lrv_profile_parse(const uint8_t *text, size_t len, const struct lrv_pfield *fields,
                       int nfields, void *dst, lrv_profile_err_fn *err, void *ctx)
 {
     size_t i = 0;
     int line = 0, bad = 0;
+    struct kv_line l;
 
-    while (i < len) {
-        const uint8_t *s = text + i, *k, *v;
-        size_t n = 0, kn, vn;
+    while (next_line(text, len, &i, &line, &l)) {
         char key[KEY_MAX];
-        const char *what = 0;
-        int f, has_eq;
+        size_t kn = l.kn < KEY_MAX - 1 ? l.kn : KEY_MAX - 1;
+        const char *what;
+        int f;
 
-        while (i + n < len && s[n] != '\n')
-            n++;
-        i += n + 1;
-        line++;
-        k = s;
-        kn = 0;
-        while (kn < n && s[kn] != '=')
-            kn++;
-        v = s + kn + 1;
-        has_eq = kn < n;
-        vn = has_eq ? n - kn - 1 : 0;
-        trim(&k, &kn);
-        if (kn == 0 && vn == 0)
-            continue;                           /* blank */
-        if (k[0] == '#')
-            continue;
-        memcpy(key, k, kn < KEY_MAX - 1 ? kn : KEY_MAX - 1);
-        key[kn < KEY_MAX - 1 ? kn : KEY_MAX - 1] = 0;
-        if (!has_eq) {
+        memcpy(key, l.k, kn);
+        key[kn] = 0;
+        if (!l.has_eq) {
             what = "no '='";
         } else {
-            trim(&v, &vn);
             for (f = 0; f < nfields; f++)
-                if (strlen(fields[f].key) == kn && !memcmp(fields[f].key, k, kn))
+                if (strlen(fields[f].key) == l.kn && !memcmp(fields[f].key, l.k, l.kn))
                     break;
-            what = f < nfields ? store(&fields[f], dst, v, vn) : "unknown key";
+            what = f < nfields ? store(&fields[f], dst, l.v, l.vn) : "unknown key";
         }
         if (what) {
             bad++;
@@ -155,6 +174,50 @@ int lrv_profile_parse(const uint8_t *text, size_t len, const struct lrv_pfield *
         }
     }
     return bad;
+}
+
+int lrv_meta_get(const uint8_t *text, size_t len, const char *key, char *buf, size_t cap)
+{
+    size_t i = 0, kn = strlen(key);
+    int line = 0, found = 0;
+    struct kv_line l, last;
+
+    while (next_line(text, len, &i, &line, &l))
+        if (l.has_eq && l.kn == kn && !memcmp(l.k, key, kn)) {
+            last = l;                           /* the last one counts, as in a profile */
+            found = 1;
+        }
+    if (cap)
+        buf[0] = 0;
+    if (!found)
+        return LRV_ERR_NOTFOUND;
+    if (!buf)
+        return LRV_OK;
+    if (last.vn >= cap)
+        return LRV_ERR_RANGE;
+    memcpy(buf, last.v, last.vn);
+    buf[last.vn] = 0;
+    return LRV_OK;
+}
+
+int lrv_pack_meta_get(const struct lrv_pack *pk, const char *entry, const char *key, char *buf,
+                      size_t cap)
+{
+    const struct lrv_pack_entry *e = lrv_pack_find(pk, entry, LRV_PT_META);
+    uint8_t *text;
+    uint32_t size;
+    int rc;
+
+    if (cap)
+        buf[0] = 0;
+    if (!e)
+        return LRV_ERR_NOTFOUND;
+    text = lrv_pack_load(pk, e, &size);
+    if (!text)
+        return LRV_ERR_IO;
+    rc = lrv_meta_get(text, size, key, buf, cap);
+    lrv_pack_free(pk, text, size);
+    return rc;
 }
 
 static void log_err(void *ctx, int line, const char *key, const char *what)

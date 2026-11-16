@@ -168,7 +168,8 @@ table does not explain is reported, so a misspelled key is found at once.
 Every profile has the base keys: `id` (names the save directory), `title`
 (the window), `lang` (the default language) and `modules` (a list the engine
 interprets, for optional native parts). Nothing about a particular game is
-compiled into an engine or into lrvne.
+compiled into an engine or into lrvne. Other META entries use the same syntax;
+`lrv_pack_meta_get` reads one key of one without a field table.
 
 ## Packs
 
