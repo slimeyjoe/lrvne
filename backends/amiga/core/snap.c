@@ -21,8 +21,11 @@
  * already in SNAPDIR/snap_<name>.ppm, the request says image=, and the program goes on.
  * Otherwise it waits for the host: a rig that can stop the emulated machine (a debugger
  * stub) takes its screenshot, reads the displayed bitmap from the addresses given, and
- * creates snap_<name>.ack; the program deletes the ack and goes on (after 60 s without one,
- * too). On a graphics card bitmap the pixel memory comes from Picasso96API.library
+ * creates snap_<name>.ack; the program deletes the ack and goes on. It waits for the ack as
+ * long as it takes, with no deadline of its own (a busy host is no reason to give up: the
+ * rig's timeout is the only one); Ctrl-C ends the wait, for a run without a rig. After a
+ * snapshot, read back or answered, the frame clock starts again from now, so its pause is not
+ * counted as a stall (timer.c am_frame_resync). On a graphics card bitmap the pixel memory comes from Picasso96API.library
  * (p96GetBitMapAttr; the library is optional, without it the request has no p96 fields). */
 #include "os_begin.h"
 #include <dos/dos.h>
@@ -45,17 +48,20 @@
 
 static void wait_ack(const char *ack)
 {
-    int i;
-    for (i = 0; i < 60 * 50 / 5; i++) {        /* 60 s */
+    for (;;) {
         BPTR lock = Lock((STRPTR)ack, SHARED_LOCK);
         if (lock) {
             UnLock(lock);
             DeleteFile((STRPTR)ack);
-            return;
+            break;
+        }
+        /* read, not cleared: the frame's input gather still sees it and quits */
+        if (SetSignal(0, 0) & SIGBREAKF_CTRL_C) {
+            am_log("snap: no answer from the host for %s, Ctrl-C\n", ack);
+            break;
         }
         Delay(5);
     }
-    am_log("snap: no answer from the host for %s\n", ack);
 }
 
 void am_snap(const char *name, uint32_t tick, uint32_t hash, int have_hash)
@@ -123,4 +129,5 @@ void am_snap(const char *name, uint32_t tick, uint32_t hash, int have_hash)
     }
     if (!captured)
         wait_ack(ack);
+    am_frame_resync();
 }

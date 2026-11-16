@@ -167,6 +167,21 @@ void am_timer_close(void)
     g_port = 0;
 }
 
+/* After a pause the program made on purpose (a snapshot waiting for the test rig, snap.c):
+ * the frame clock starts again from now, and the pause is neither a stall nor part of the
+ * profile period. */
+void am_frame_resync(void)
+{
+    struct timeval now;
+    if (!g_open)
+        return;
+    GetSysTime(&now);
+    am_fr->dl_secs = now.tv_secs;
+    am_fr->dl_micro = now.tv_micro;
+    am_fr->dl_frac = 0;
+    prof_reset();
+}
+
 /* The frame tick: one OS call with `ops` (frameos.h). With AM_F_WAIT it waits for the
  * next frame's deadline; after a stall (disk load, screen in the background with a busy
  * system) the clock resynchronises instead of running the missed frames back to back. */

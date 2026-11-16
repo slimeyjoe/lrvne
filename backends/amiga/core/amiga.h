@@ -140,6 +140,7 @@ void am_timer_close(void);
 void am_timer_set_period(uint32_t frame_ns);    /* the video mode's frame (video_open) */
 uint32_t am_timer_period_us(void);
 void am_frame_wait(ULONG ops);           /* frameos.h AM_F_*: one OS call per frame */
+void am_frame_resync(void);              /* after a deliberate pause (snap.c) */
 uint32_t am_ticks(void);                 /* frame periods of real time since the start */
 /* Stall profile: time spent in pack reads and presents (main task) and in rendering
  * (audio task) since the frame clock was last on time; one log line per stall of more than

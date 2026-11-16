@@ -475,7 +475,10 @@ No test of these targets needs a human or game data.
   AROS it writes the picture too, read back from the screen
   (`ReadPixelArray`), and goes on. On the other two it waits for an
   acknowledgement file: a rig around an emulator with a debugger stub stops
-  the machine, takes the screenshot and the bitmap, and answers.
+  the machine, takes the screenshot and the bitmap, and answers. The program
+  waits for that answer without a deadline of its own (the rig's timeout is
+  the only one; Ctrl-C ends the wait), and after every snapshot the frame
+  clock starts again from now, so the pause is not counted as a stall.
 * **The assembly FM loop.** `make opn68k` (`tests/opn68k.sh`) links the
   assembly loop and the C loop into one 68k program and runs it under
   qemu-m68k as a 68040: the same pseudo-random song at four rates, every
