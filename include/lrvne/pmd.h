@@ -3,9 +3,10 @@
  * the PC-9801-26K board) plays: an optional module (LRVNE_PMD=1, mk/lrvne.mk).
  *
  * What PMD.COM does, register write for register write, reimplemented: the part interpreter of
- * parts A-I (FM 1-3, the FM3 parts D-F on the slots of channel 3, SSG G-I), the FM effect part
- * (an effect bank, the .EFC file), PMD's built-in SSG effects, the fade, the two timers of the
- * chip that clock it all, and the INT 60h functions an engine calls. docs/pmd.md says what is
+ * parts A-I (FM 1-3, the FM3 parts D-F on the slots of channel 3, SSG G-I) and of rhythm part
+ * K (its drums are PMD's built-in SSG effects), the FM effect part (an effect bank, the .EFC
+ * file), the SSG effects, the fade, the measure counter, the two timers of the chip that clock
+ * it all, and the INT 60h functions an engine calls. docs/pmd.md says what is
  * covered and how it is checked against the real driver; addresses in comments are PMD.COM's
  * CS offsets.
  *
@@ -82,6 +83,10 @@ struct lrv_pmd {
     uint16_t voicetab;
     int has_voices;
     struct lrv_pmd_part part[LRV_PMD_NPARTS];
+    struct lrv_pmd_part k;   /* rhythm part K (work 3538) */
+    uint16_t rtab;           /* 3104: the R-pattern table (offset in the data) */
+    int32_t rptr;            /* 3106: in the current R pattern; -1 = the empty one (30A3) */
+    uint16_t rdrum;          /* 3136: the drums of the last hit */
 
     /* globals (work area 30A0..) */
     uint8_t ks[3];           /* 30A5.. key-on slot bits per FM channel */
@@ -92,7 +97,11 @@ struct lrv_pmd {
     uint8_t TB, t, TBc;
     uint8_t status1, status2;
     uint8_t fade, fadesp;
-    uint8_t voldown[2];
+    uint8_t voldown[2];      /* 310B/310C: FM, SSG volume-down */
+    uint8_t voldown_def[2];  /* 3164/3165: the installer's (/DF /DS), from every song start on */
+    uint8_t measure_len;     /* 3117: music clocks per measure */
+    uint8_t measure_clk;     /* 3118: the clock within the measure */
+    uint16_t measure;        /* 315B: measures since the song started */
     uint8_t noise, noisec, reg7;
     uint8_t na;
     uint16_t rnd;
@@ -100,6 +109,7 @@ struct lrv_pmd {
     uint8_t allst;
     int playing;
     int stop_after_fade;     /* 0 with the resident driver's /F option */
+    int stop_pending;        /* 30B8 bit 1: a finished fade stops the song at the next clock */
 
     /* FM effect (EFC) */
     uint8_t *efc;
@@ -130,6 +140,11 @@ void lrv_pmd_init(struct lrv_pmd *p, lrv_pmd_write_fn write, void *ctx, uint32_t
 /* The effect bank (mutable: loop counters live in it) and the SSG-effect table. */
 void lrv_pmd_set_efc(struct lrv_pmd *p, uint8_t *efc, uint32_t size);
 void lrv_pmd_set_ssgtab(struct lrv_pmd *p, const uint8_t *tab, uint32_t size);
+/* The installer's options: the FM and SSG volume-down (/DFn /DSn: 0 = loudest; PMD's
+ * defaults are 16 and 0), which every song start reloads, and whether a finished fade-out
+ * stops the song (it does unless /F). Call it after lrv_pmd_init, before a song starts. */
+void lrv_pmd_set_options(struct lrv_pmd *p, int voldown_fm, int voldown_ssg,
+                         int stop_after_fade);
 /* Another output rate from now on. */
 void lrv_pmd_set_rate(struct lrv_pmd *p, uint32_t out_rate);
 
@@ -146,6 +161,7 @@ void lrv_pmd_fm_effect_on(struct lrv_pmd *p, int n);                           /
 void lrv_pmd_fm_effect_off(struct lrv_pmd *p);                                 /* AH=0Dh */
 void lrv_pmd_ssg_effect_start(struct lrv_pmd *p, int n, int pps_flags);        /* AH=03h */
 void lrv_pmd_ssg_effect_stop(struct lrv_pmd *p);                               /* AH=04h */
+unsigned lrv_pmd_measure(const struct lrv_pmd *p);                             /* AH=05h */
 
 /* Advances time by `frames` output samples, firing the timer interrupts (and their register
  * writes) at the samples they fall on; render(rctx, n) is called for each run of n samples

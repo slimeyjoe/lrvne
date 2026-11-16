@@ -116,10 +116,12 @@ static int replay(const char *log, const char *song, const char *table)
             *next++ = 0;
         lineno++;
         if (line[0] == '#') {
-            if (strstr(line, "options") && !strstr(line, "/F"))
-                pmd.stop_after_fade = 1;
-            else if (strstr(line, "options"))
-                pmd.stop_after_fade = 0;
+            const char *o = strstr(line, "options");
+            if (o) {                    /* the installer's options that the module has */
+                const char *df = strstr(o, "/DF"), *ds = strstr(o, "/DS");
+                lrv_pmd_set_options(&pmd, df ? atoi(df + 3) : 16, ds ? atoi(ds + 3) : 0,
+                                    !strstr(o, "/F "));
+            }
             continue;
         }
         if (line[0] == 'I') {
@@ -149,12 +151,13 @@ static int replay(const char *log, const char *song, const char *table)
             lrv_pmd_run_until(&pmd, clock);
             bad += !same_writes(line + 1 + n, from, clock, 1, log, lineno);
             lrv_pmd_get_status(&pmd, &ps1, &ps2);
-            if (ps1 != s1 || ps2 != s2 || lrv_pmd_get_fadevol(&pmd) != fade) {
-                fprintf(stderr, "%s line %d: status %02X/%02X fade %02X, real %02X/%02X %02X\n",
-                        log, lineno, ps1, ps2, lrv_pmd_get_fadevol(&pmd), s1, s2, fade);
+            if (ps1 != s1 || ps2 != s2 || lrv_pmd_get_fadevol(&pmd) != fade ||
+                lrv_pmd_measure(&pmd) != meas) {
+                fprintf(stderr, "%s line %d: status %02X/%02X fade %02X measure %u, real "
+                        "%02X/%02X %02X %u\n", log, lineno, ps1, ps2, lrv_pmd_get_fadevol(&pmd),
+                        lrv_pmd_measure(&pmd), s1, s2, fade, meas);
                 bad++;
             }
-            (void)meas;
             irqs++;
         }
     }
@@ -236,6 +239,7 @@ int main(void)
     n += replay(DATA "synth1.log", DATA "SYNTH1.M", 0);
     n += replay(DATA "synth1-fade.log", DATA "SYNTH1.M", 0);
     n += replay(DATA "synth2.log", DATA "SYNTH2.M", 0);
+    n += replay(DATA "synth3.log", DATA "SYNTH3.M", DATA "SYNTH.SSG");
     test_frames();
     free(got);
     if (th_fails) {

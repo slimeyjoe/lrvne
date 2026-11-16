@@ -13,9 +13,12 @@ write for register write, when the game calls it. It has:
 - the part interpreter: FM parts A–C, the FM3 parts D–F on the slots of channel 3, SSG parts
   G–I, with every command of the format, the LFOs, the software envelopes, portamento, the
   masks and the volume-down;
+- rhythm part K: a stream of R patterns, whose drums are PMD's built-in SSG effects on SSG
+  channel 3 (without PPSDRV the lowest drum of a hit only, and none while the music fades);
 - the FM effect part, which plays effects from an effect bank (an `.EFC` file);
-- PMD's built-in SSG effects;
-- the fade;
+- PMD's built-in SSG effects, and their priorities against each other, the drums and part I;
+- the fade, and the stop that follows it unless the driver was installed with `/F`;
+- the measure counter (measures of `DF` clocks since the song started);
 - the chip's two timers, which clock all of it: Timer B is the music clock, Timer A the
   effect clock. The timers run from their register values: a song's tempo is the Timer-B
   value its commands set.
@@ -47,6 +50,7 @@ static void pmd_write(void *ctx, uint8_t reg, uint8_t val)
     lrv_music_open(&e->music, hal, &mc);
     lrv_mixer_lock(&e->music.mixer);
     lrv_pmd_init(&e->pmd, pmd_write, &e->music.q, lrv_music_rate(&e->music));
+    lrv_pmd_set_options(&e->pmd, 16, 0, 1);  /* as installed: /DF16 /DS0, no /F */
     lrv_pmd_set_ssgtab(&e->pmd, table, table_size);    /* if the game uses SSG effects */
     lrv_mixer_unlock(&e->music.mixer);
     lrv_music_start(&e->music);
@@ -60,6 +64,10 @@ The engine owns what the original engine owned, and the driver reads and writes 
 - **The SSG-effect table** (`lrv_pmd_set_ssgtab`). It is part of PMD.COM and so the player's
   own: `tools/lrvne/pmd.py` takes it out of their PMD.COM 4.7g when the pack is built.
 
+`lrv_pmd_set_options` takes what the game's batch file gave PMD's installer: the FM and SSG
+volume-down (`/DFn`, `/DSn`; PMD reloads them at every song start) and `/F` (a finished
+fade-out does not stop the song).
+
 The driver keeps pointers to all three. Every call into it from the game is made under the
 audio lock (`lrv_mixer_lock`), because in pull mode it runs on the backend's audio thread.
 
@@ -71,6 +79,7 @@ audio lock (`lrv_mixer_lock`), because in pull mode it runs on the backend's aud
 | `lrv_pmd_mstop` | 01h | stop it |
 | `lrv_pmd_fade` | 02h | fade out at a speed |
 | `lrv_pmd_ssg_effect_start` / `_stop` | 03h / 04h | a built-in SSG effect |
+| `lrv_pmd_measure` | 05h | the measure counter |
 | `lrv_pmd_get_fadevol` | 08h | the fade volume |
 | `lrv_pmd_get_status` | 0Ah | status1 (set by the song) and status2 (its loop count; FFh when it has ended) |
 | `lrv_pmd_fm_effect_on` / `_off` | 0Ch / 0Dh | an FM effect from the bank |
@@ -80,7 +89,10 @@ audio lock (`lrv_mixer_lock`), because in pull mode it runs on the backend's aud
 
 - The OPNA builds (PMD86, PMDB2): FM channels 4–6, the rhythm source, ADPCM and 86-PCM, pan.
   These need a YM2608 core in lrvne first (`docs/roadmap.md`).
-- PPSDRV (SSG samples through PDR).
+- PPSDRV (SSG samples through PDR), which plays the drums of part K as samples instead, all
+  of a hit's at once. That needs a PCM channel in lrvne's sound path.
+- The sound-source type of a song (its byte 0), which is not passed: the module plays every
+  song as type 0, as PMD.COM does all the songs made for it.
 - PCM part J, which PMD.COM never plays.
 - The hot keys, skipping to a measure, and command `C6`.
 

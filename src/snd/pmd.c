@@ -110,7 +110,7 @@ static void fade_step(struct lrv_pmd *p)                  /* 21CE */
             p->fade = 0xFF;
             p->fadesp = 0;
             if (p->stop_after_fade)
-                lrv_pmd_mstop(p);
+                p->stop_pending = 1;        /* 21F9: done by the next Timer-B interrupt */
         } else {
             p->fade = (uint8_t)v;
         }
@@ -1068,16 +1068,20 @@ static unsigned cmd(struct lrv_pmd *p, struct lrv_pmd_part *q, unsigned si, unsi
             q->ext = (uint8_t)((q->ext & 0xFB) | ((rb(p, q, si) & 1) << 2));
         return si + 1;
     case 0xEF: w(p, rb(p, q, si), rb(p, q, si + 1)); return si + 2;
-    case 0xD4: {                                      /* SSG effect (0167): n = 0 stops */
+    case 0xD4: {                                      /* 1210: SSG effect; n = 0 stops */
         unsigned n = rb(p, q, si);
+        if (q->mask)
+            return si + 1;
         if (n == 0)
             lrv_pmd_ssg_effect_stop(p);
         else
             lrv_pmd_ssg_effect_start(p, (int)n, 1);
         return si + 1;
     }
-    case 0xD3: {                                      /* FM effect from music data */
+    case 0xD3: {                                      /* 122B: FM effect from music data */
         unsigned n = rb(p, q, si);
+        if (q->mask)
+            return si + 1;
         if (n == 0)
             lrv_pmd_fm_effect_off(p);
         else
@@ -1087,7 +1091,7 @@ static unsigned cmd(struct lrv_pmd *p, struct lrv_pmd_part *q, unsigned si, unsi
     case 0xD2: p->fadesp = (uint8_t)rb(p, q, si); return si + 1;
     case 0xDC: p->status1 = (uint8_t)rb(p, q, si); return si + 1;
     case 0xDB: p->status1 = (uint8_t)(p->status1 + rb(p, q, si)); return si + 1;
-    case 0xDF: return si + 1;
+    case 0xDF: p->measure_len = (uint8_t)rb(p, q, si); return si + 1;    /* 13B1 */
     case 0xDE: case 0xDD: {
         unsigned n = rb(p, q, si);
         int v;
@@ -1317,8 +1321,10 @@ static unsigned cmd(struct lrv_pmd *p, struct lrv_pmd_part *q, unsigned si, unsi
         if (al >= 2) {
             unsigned v;
             int idx;
-            if (al < 0xF7)
-                return si;                    /* invalid: treated as part end by the data */
+            if (al < 0xF7) {                  /* invalid (0A88): the byte becomes a part end */
+                wb(p, q, si - 1, 0x80);
+                return si - 1;
+            }
             v = rb(p, q, si);
             si++;
             idx = (al == 0xFF || al == 0xFE) ? 0 : (al == 0xFD || al == 0xFC) ? 1 : -1;
@@ -1327,7 +1333,7 @@ static unsigned cmd(struct lrv_pmd *p, struct lrv_pmd_part *q, unsigned si, unsi
             if (al == 0xFF || al == 0xFD)
                 p->voldown[idx] = (uint8_t)v;
             else if (v == 0)
-                p->voldown[idx] = idx ? 0 : 0x10;
+                p->voldown[idx] = p->voldown_def[idx];
             else if (v & 0x80) {
                 unsigned r = p->voldown[idx] + v;
                 p->voldown[idx] = (uint8_t)(r > 0xFF ? (r & 0xFF) : 0);
@@ -1805,6 +1811,133 @@ static void ssg_tick(struct lrv_pmd *p, struct lrv_pmd_part *q)
     p->allst &= q->lstat;
 }
 
+/* ---- rhythm part K -------------------------------------------------------------------------- */
+
+/* a byte of the current R pattern; the empty pattern (30A3) is one FFh */
+static unsigned rpat(const struct lrv_pmd *p, int32_t a)
+{
+    return a < 0 ? 0xFF : rb(p, &p->k, (unsigned)a);
+}
+
+/* A command of part K, in its stream or in a pattern (table 0BBA): most are those of the SSG
+ * parts, a few are skipped, its mask has no side effects. Returns the address after it. */
+static unsigned rhythm_cmd(struct lrv_pmd *p, struct lrv_pmd_part *q, unsigned si, unsigned c)
+{
+    int act;
+    if (c < 0xB5) {                                       /* 0A88: invalid, a part end */
+        wb(p, q, si - 1, 0x80);
+        return si - 1;
+    }
+    switch (c) {
+    case 0xFE: case 0xF5: case 0xEE: case 0xED: case 0xE7: case 0xDA: case 0xD0: case 0xCC:
+    case 0xCB: case 0xCA: case 0xC9: case 0xC4: case 0xC2: case 0xBE: case 0xBC: case 0xBB:
+    case 0xB9: case 0xB7:
+        return si + 1;
+    case 0xF1:                                            /* 0F06: PPSDRV's, none here */
+        return si + 1;
+    case 0xD6: case 0xBD:
+        return si + 2;
+    case 0xF2: case 0xF0: case 0xBF:
+        return si + 4;
+    case 0xCD:
+        return si + 5;
+    case 0xC0: {                                          /* 0E8C */
+        unsigned al = rb(p, q, si);
+        if (al < 2) {
+            if (al)
+                q->mask |= 0x40;
+            else
+                q->mask &= 0xBF;
+            return si + 1;
+        }
+        break;                                            /* the subcommands: shared */
+    }
+    default:
+        break;
+    }
+    return cmd(p, q, si, c, &act);
+}
+
+static void rhythm_tick(struct lrv_pmd *p)                  /* 0991 */
+{
+    struct lrv_pmd_part *q = &p->k;
+    int32_t bx;
+    unsigned al, si;
+    if (q->addr == 0)
+        return;
+    q->len--;
+    if (q->len != 0) {
+        p->allst &= q->lstat;
+        return;
+    }
+    bx = p->rptr;
+    for (;;) {
+        al = rpat(p, bx);
+        if (bx >= 0)
+            bx++;
+        if (al == 0xFF) {                                 /* the pattern ended: the next one */
+            si = q->addr;
+            for (;;) {
+                al = rb(p, q, si);
+                si++;
+                if (al == 0x80) {
+                    si--;
+                    q->addr = (uint16_t)si;
+                    q->lstat = 3;
+                    if (q->loop) {
+                        si = q->loop;
+                        q->lstat = 1;
+                        continue;
+                    }
+                    p->rptr = -1;                         /* the part has ended (09FF) */
+                    goto done;
+                }
+                if (al > 0x80) {
+                    si = rhythm_cmd(p, q, si, al);
+                    continue;
+                }
+                q->addr = (uint16_t)si;
+                bx = (int32_t)rw(p, q, p->rtab + 2u * al);
+                break;
+            }
+            continue;
+        }
+        if (!(al & 0x80)) {                               /* a rest */
+            p->rdrum = 0;
+            break;
+        }
+        if (al & 0x40) {                                  /* a command in the pattern */
+            bx = (int32_t)rhythm_cmd(p, q, (unsigned)bx, al);
+            continue;
+        }
+        if (q->mask) {                                    /* masked: the drums are not played */
+            p->rdrum = 0;
+            bx++;
+            break;
+        }
+        {
+            unsigned drums = ((al << 8) | rpat(p, bx)) & 0x3FFF;
+            bx++;
+            p->rdrum = (uint16_t)drums;
+            if (drums && p->fade == 0) {                  /* 0A3A: none while fading */
+                int n = 0;
+                while (!(drums & 1)) {
+                    drums >>= 1;
+                    n++;
+                }
+                lrv_pmd_ssg_effect_start(p, n, 3);        /* without PPSDRV the lowest only */
+            }
+        }
+        break;
+    }
+    q->len = (uint8_t)rpat(p, bx);                        /* 09B4 */
+    p->rptr = bx + 1;
+done:
+    p->tie = 0;                                           /* 07E9 */
+    p->tvc = 0;
+    p->allst &= q->lstat;
+}
+
 /* ---- music clock (Timer B) ----------------------------------------------------------------- */
 
 static void music_tick(struct lrv_pmd *p)                       /* 05A0 */
@@ -1813,12 +1946,15 @@ static void music_tick(struct lrv_pmd *p)                       /* 05A0 */
     p->allst = 3;
     for (i = 6; i < 9; i++)
         ssg_tick(p, &p->part[i]);
+    rhythm_tick(p);
     for (i = 0; i < 6; i++)
         fm_tick(p, &p->part[i]);
     if (p->allst) {
         for (i = 0; i < LRV_PMD_PARTS; i++)
             if (p->part[i].lstat != 3)
                 p->part[i].lstat = 0;
+        if (p->k.lstat != 3)
+            p->k.lstat = 0;
         if (p->allst == 3)
             p->status2 = 0xFF;
         else {
@@ -1832,19 +1968,38 @@ static void music_tick(struct lrv_pmd *p)                       /* 05A0 */
 
 void lrv_pmd_timer_b(struct lrv_pmd *p)                             /* 2B60 */
 {
+    if (p->stop_pending)
+        lrv_pmd_mstop(p);
     if (!p->playing)
         return;
     p->na = (uint8_t)(p->a3119 - p->a30B7);
     music_tick(p);
+    p->measure_clk++;                                     /* measure_count 2C26 */
+    if (p->measure_clk == p->measure_len) {
+        p->measure_clk = 0;
+        p->measure++;
+    }
     p->a30B7 = p->a3119;
+}
+
+unsigned lrv_pmd_measure(const struct lrv_pmd *p)
+{
+    return p->measure;
 }
 
 /* ---- the built-in SSG effects ---------------------------------------------------------------- */
 
-static void ssgfx_write_frame(struct lrv_pmd *p, const uint8_t *f)   /* 0217 */
+void lrv_pmd_ssg_effect_stop(struct lrv_pmd *p);
+
+/* 0217: a frame of the effect, or its end (FFh) */
+static void ssgfx_write_frame(struct lrv_pmd *p, const uint8_t *f)
 {
     struct lrv_pmd_ssgfx *s = &p->sfx;
     unsigned mixer;
+    if (f[0] == 0xFF) {
+        lrv_pmd_ssg_effect_stop(p);
+        return;
+    }
     s->count = f[0];
     s->tone = (uint16_t)(f[1] | (f[2] << 8));
     s->noise = f[3];
@@ -1855,6 +2010,7 @@ static void ssgfx_write_frame(struct lrv_pmd *p, const uint8_t *f)   /* 0217 */
     w(p, 0x04, s->tone & 0xFF);
     w(p, 0x05, s->tone >> 8);
     w(p, 0x06, s->noise);
+    p->noisec = s->noise;                   /* 311C: what the noise register holds */
     mixer = (p->reg7 & ~0x24u) | ((f[4] & 1) << 2) | ((f[4] & 8) << 2);
     p->reg7 = (uint8_t)mixer;
     w(p, 0x07, mixer);
@@ -1864,11 +2020,10 @@ static void ssgfx_write_frame(struct lrv_pmd *p, const uint8_t *f)   /* 0217 */
     w(p, 0x0D, f[8]);
 }
 
-void lrv_pmd_ssg_effect_stop(struct lrv_pmd *p)                     /* 0286 */
+/* 0286: also when none runs (music command D4h 00h, INT 60h AH=04h): channel 3 is silenced */
+void lrv_pmd_ssg_effect_stop(struct lrv_pmd *p)
 {
     struct lrv_pmd_ssgfx *s = &p->sfx;
-    if (!s->active)
-        return;
     s->active = 0;
     w(p, 0x0A, 0);
     p->reg7 |= 0x24;
@@ -1905,10 +2060,10 @@ static void ssgfx_tick(struct lrv_pmd *p)                       /* 0206 */
     struct lrv_pmd_ssgfx *s = &p->sfx;
     if (!s->active)
         return;
-    s->count--;
-    if (s->count <= 0) {
+    s->count = (s->count - 1) & 0xFF;       /* byte counters, as the driver's */
+    if (s->count == 0) {
         s->frame += 11;
-        if (s->frame >= p->ssgtab + p->ssgtab_size || s->frame[0] == 0xFF) {
+        if (s->frame >= p->ssgtab + p->ssgtab_size) {
             lrv_pmd_ssg_effect_stop(p);
             return;
         }
@@ -1919,12 +2074,14 @@ static void ssgfx_tick(struct lrv_pmd *p)                       /* 0206 */
     w(p, 0x04, s->tone & 0xFF);
     w(p, 0x05, s->tone >> 8);
     w(p, 0x07, p->reg7);
-    if (s->sweep & 0x0F) {
-        if (--s->sweep_ctr <= 0) {
-            int d = (int8_t)(s->sweep & 0xF0) >> 4;
+    if (s->sweep) {                         /* 02DA: the noise sweep */
+        s->sweep_ctr = (s->sweep_ctr - 1) & 0xFF;
+        if (s->sweep_ctr == 0) {
+            int d = (int8_t)s->sweep >> 4;
             s->sweep_ctr = s->sweep & 0x0F;
-            s->noise = (uint8_t)((s->noise + d) & 0x1F);
+            s->noise = (uint8_t)(s->noise + d);
             w(p, 0x06, s->noise);
+            p->noisec = s->noise;
         }
     }
 }
@@ -2011,7 +2168,9 @@ void lrv_pmd_init(struct lrv_pmd *p, lrv_pmd_write_fn write, void *ctx, uint32_t
     p->TB = p->TBc = 0xC8;              /* installer wrote 26h = C8h */
     p->t = 78;
     p->reg26 = 0xC8;
-    p->voldown[0] = 0x10;
+    p->voldown[0] = p->voldown_def[0] = 0x10;   /* PMD's defaults: /DF16 /DS0 */
+    p->measure_len = 0x60;
+    p->rptr = -1;
     p->status2 = 0xFF;
     p->fade = 0xFF;
     p->fm_eff_number = -1;
@@ -2086,6 +2245,7 @@ static void silence_all(struct lrv_pmd *p)                      /* 2248 */
 
 void lrv_pmd_mstop(struct lrv_pmd *p)                               /* 0569 / 0582 */
 {
+    p->stop_pending = 0;
     p->playing = 0;
     p->fadesp = 0;
     p->status2 = 0xFF;
@@ -2102,6 +2262,7 @@ void lrv_pmd_mstart(struct lrv_pmd *p)                              /* 035A */
         return;
     d = p->m;
     /* 1. stop */
+    p->stop_pending = 0;
     p->playing = 0;
     p->fadesp = 0;
     p->status2 = 0xFF;
@@ -2117,6 +2278,15 @@ void lrv_pmd_mstart(struct lrv_pmd *p)                              /* 035A */
         p->part[i].lfo[0].mdc[0] = p->part[i].lfo[0].mdc[1] = 0xFF;
         p->part[i].lfo[1].mdc[0] = p->part[i].lfo[1].mdc[1] = 0xFF;
     }
+    {
+        uint8_t keep = p->k.mask & 0x1F;
+        memset(&p->k, 0, sizeof p->k);
+        p->k.mask = keep;
+        p->k.note = 0xFF;
+        p->k.kst = 0xFF;
+        p->k.lfo[0].mdc[0] = p->k.lfo[0].mdc[1] = 0xFF;
+        p->k.lfo[1].mdc[0] = p->k.lfo[1].mdc[1] = 0xFF;
+    }
     p->tie = 0; p->tvc = 0;
     p->status1 = 0;
     p->status2 = 0;
@@ -2126,8 +2296,11 @@ void lrv_pmd_mstart(struct lrv_pmd *p)                              /* 035A */
     memset(p->sd, 0, sizeof p->sd);
     p->sd_any = 0; p->fm3need = 0;
     p->reg27 = 0x3F;
-    p->voldown[0] = 0x10;
-    p->voldown[1] = 0;
+    p->voldown[0] = p->voldown_def[0];
+    p->voldown[1] = p->voldown_def[1];
+    p->measure = 0;
+    p->measure_clk = 0;
+    p->measure_len = 0x60;
     /* 3. header */
     for (i = 0; i < 11; i++)
         hdr[i] = (uint16_t)(d[2 * i] | (d[2 * i + 1] << 8));
@@ -2154,6 +2327,16 @@ void lrv_pmd_mstart(struct lrv_pmd *p)                              /* 035A */
             q->mix = 7;
             E(q, 0x21) = 3;
         }
+    }
+    {                                                     /* K, and its R-pattern table */
+        unsigned a = hdr[10];
+        p->k.ch = 3;
+        p->k.addr = (uint16_t)((a < p->msize && d[a] == 0x80) ? 0 : a);
+        p->k.len = 1;
+        p->k.vol = 0x0F;
+        p->rtab = (uint16_t)(d[0x16] | (d[0x17] << 8));
+        p->rptr = -1;
+        p->rdrum = 0;
     }
     /* 4-6 */
     p->fade = 0;
@@ -2320,4 +2503,12 @@ void lrv_pmd_seq(struct lrv_pmd *p, struct lrv_opnq_seq *seq)
     memset(seq, 0, sizeof *seq);
     seq->ctx = p;
     seq->advance = seq_advance;
+}
+
+void lrv_pmd_set_options(struct lrv_pmd *p, int voldown_fm, int voldown_ssg,
+                         int stop_after_fade)
+{
+    p->voldown[0] = p->voldown_def[0] = (uint8_t)voldown_fm;
+    p->voldown[1] = p->voldown_def[1] = (uint8_t)voldown_ssg;
+    p->stop_after_fade = stop_after_fade;
 }

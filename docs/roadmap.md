@@ -18,7 +18,8 @@ implemented.
 | A second machine module (X68000: its video mode, keyboard map, YM2151 core) | large | mostly additive; shaped for by `lrv_video_mode` and `src/machine/` |
 | A tick source that is not the frame (a sound driver's timer pacing the game) | medium | additive to `sys.h` |
 | Joystick input | small | adds to `input.h` and every backend |
-| A music driver used by more than one engine as an optional module | medium | additive; a change of scope: today sequencers stay in the engines |
+| PMD's OPNA builds (PMD86, PMDB2) in the PMD module: FM 4–6, the PCM part J, pan | medium | additive; needs the YM2608 core and the PCM channel above |
+| PPSDRV in the PMD module: the drums of part K as SSG samples | small | additive; needs the PCM channel above |
 
 Engine-side matters the surveys turned up, for which lrvne already has the
 means: a keyboard handler that keeps only the last key (collapse the press
