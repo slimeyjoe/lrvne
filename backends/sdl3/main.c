@@ -54,10 +54,12 @@ static void frame_wait(void)
 
     lrv_sdl3.frames++;
     if (g_args.max_ticks && (long)lrv_sdl3.frames > g_args.max_ticks) {
-        if (lrv_sdl3.control)
-            lrv_ctl_exit(3, "max ticks reached");
-        fprintf(stderr, "%s: max ticks reached\n", lrv_sdl3.app->name);
-        exit(3);
+        /* the engine leaves through its own shutdown (an emergency quit at the next poll, as
+         * on the machines); no more waiting; exit code 3 */
+        if (!lrv_sdl3.out_of_ticks)
+            fprintf(stderr, "%s: max ticks reached\n", lrv_sdl3.app->name);
+        lrv_sdl3.out_of_ticks = 1;
+        return;
     }
     if (lrv_sdl3.control) {             /* no real time: the driver paces the engine */
         lrv_ctl_tick(lrv_sdl3.frames);
@@ -261,11 +263,13 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
     }
 
     rc = app->run(app->ctx, &hal, &g_args.cfg);
+    if (lrv_sdl3.out_of_ticks)
+        rc = 3;
 
     lrv_sdl3_watchdog_arm();            /* SDL_Quit closes the audio subsystem too */
     SDL_Quit();
     lrv_autoplay_free(&lrv_sdl3.autoplay);
     if (lrv_sdl3.control)
-        lrv_ctl_exit(rc, "engine returned");
+        lrv_ctl_exit(rc, lrv_sdl3.out_of_ticks ? "max ticks reached" : "engine returned");
     return rc;
 }

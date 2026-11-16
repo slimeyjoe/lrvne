@@ -6,7 +6,9 @@
  *
  * Input comes from the autoplay spec (autoplay.h; default "ok:30", a press of return every
  * 30 ticks), or from the driver in control mode (control.h). The run ends when the engine
- * quits, or after --max-ticks frames (default 200000) with exit code 3.
+ * quits, or after --max-ticks frames (default 200000): the engine is then asked to quit at
+ * once (an emergency quit, as a machine's backend does at its tick limit), leaves through its
+ * own shutdown, and the exit code is 3.
  *
  * What a run can leave behind:
  *   snapshots     the frames at the spec's snap: ticks, as lines on stdout (shot.h)
@@ -55,6 +57,7 @@ static struct lrv_args g_args;
 static int g_control;
 static long g_max_ticks = DEFAULT_MAX_TICKS;
 static uint32_t g_tick;
+static int g_out_of_ticks;              /* --max-ticks ran out: the next poll asks for a quit */
 static struct lrv_video_mode g_mode;
 static struct lrv_autoplay g_ap;
 static struct lrv_shot g_snap;          /* the last frame, when the spec takes snapshots */
@@ -280,10 +283,12 @@ static void t_frame_wait(void)
             a_pull();
     }
     if ((long)g_tick > g_max_ticks) {
-        fprintf(stderr, "%s: max ticks reached\n", g_app->name);
-        if (g_control)
-            lrv_ctl_exit(3, "max ticks reached");
-        exit(3);
+        /* the engine leaves through its own shutdown, as on the machines (an emergency quit
+         * at the next poll; a frame no longer waits once it is seen); exit code 3 */
+        if (!g_out_of_ticks)
+            fprintf(stderr, "%s: max ticks reached\n", g_app->name);
+        g_out_of_ticks = 1;
+        return;
     }
     if (g_control) {
         lrv_ctl_tick(g_tick);
@@ -308,10 +313,12 @@ static void i_poll(struct lrv_input *in)
 {
     if (g_control) {
         lrv_ctl_input(in);
-        return;
+    } else {
+        memset(in, 0, sizeof *in);
+        lrv_autoplay_poll(&g_ap, g_tick, in);
     }
-    memset(in, 0, sizeof *in);
-    lrv_autoplay_poll(&g_ap, g_tick, in);
+    if (g_out_of_ticks)
+        in->events |= LRV_EV_EMERGENCY;
 }
 
 static void i_flush(void)
@@ -543,6 +550,8 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
         g_args.cfg.audio_rate = DEFAULT_RATE;
 
     rc = app->run(app->ctx, &hal, &g_args.cfg);
+    if (g_out_of_ticks)
+        rc = 3;
 
     lrv_autoplay_free(&g_ap);
     lrv_shot_free(&g_snap);
@@ -551,6 +560,6 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
         rc = 1;
     }
     if (g_control)
-        lrv_ctl_exit(rc, "engine returned");
+        lrv_ctl_exit(rc, g_out_of_ticks ? "max ticks reached" : "engine returned");
     return rc;
 }

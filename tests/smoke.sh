@@ -7,8 +7,8 @@
 #
 # Covered: the presentation test, scripted input with snapshots and pictures, storage, pack
 # discovery (--pak, <program>.pak, a pack appended to the program), the profile and a font in
-# the pack, the control protocol, the tick limit, sound (offline, pushed and pulled), the
-# command line's errors.
+# the pack, the control protocol, the tick limit (the engine leaves through its own shutdown),
+# sound (offline, pushed and pulled), the command line's errors.
 set -eu
 # bytes, not characters: BSD tr refuses binary input under a UTF-8 locale
 LC_ALL=C
@@ -181,8 +181,9 @@ rc=0
 
 # ---- limits, sound, errors --------------------------------------------------------------------
 rc=0
-"$exe" --storage "$tmp/store" --max-ticks 50 >/dev/null 2>&1 || rc=$?
+"$exe" --storage "$tmp/store" --max-ticks 50 >/dev/null 2>"$tmp/ticks.err" || rc=$?
 [ "$rc" -eq 3 ] || fail "--max-ticks: exit code $rc, not 3"
+grep -q 'max ticks reached' "$tmp/ticks.err" || fail "--max-ticks: no 'max ticks reached'"
 # the light FM core renders at the rate asked for: 0.1 s at 44100 Hz, and it is not silence
 "$exe" --render-wav "$tmp/tune.wav" --song tune --seconds 0.1 --opn lite 2>/dev/null ||
     fail "--render-wav exited with $?"

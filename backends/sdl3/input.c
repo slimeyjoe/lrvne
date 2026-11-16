@@ -193,6 +193,8 @@ void lrv_sdl3_input_poll(struct lrv_input *in)
     pump_events();
     if (lrv_sdl3.control) {             /* the driver's input, not the host's */
         lrv_ctl_input(in);
+        if (lrv_sdl3.out_of_ticks)
+            in->events |= LRV_EV_EMERGENCY;
         return;
     }
     memset(g_in.down, 0, sizeof g_in.down);
@@ -217,6 +219,8 @@ void lrv_sdl3_input_poll(struct lrv_input *in)
     *in = g_in;
     if (lrv_sdl3.have_autoplay)
         lrv_autoplay_poll(&lrv_sdl3.autoplay, lrv_sdl3.frames, in);
+    if (lrv_sdl3.out_of_ticks)
+        in->events |= LRV_EV_EMERGENCY;
     g_in.events = 0;
     g_in.nkeys = 0;
 }

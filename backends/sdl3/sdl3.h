@@ -21,6 +21,7 @@ struct lrv_sdl3 {
     struct lrv_autoplay autoplay;   /* --autoplay */
     int have_autoplay;
     uint32_t frames;                /* frame_wait calls */
+    int out_of_ticks;               /* --max-ticks ran out: every poll asks for a quit */
 };
 
 extern struct lrv_sdl3 lrv_sdl3;
