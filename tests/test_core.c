@@ -264,6 +264,20 @@ static void test_sys(void)
     lrv_sys_frame_wait(&s);
     lrv_sys_key_flush(&s);
     CHECK(!lrv_sys_key_sense(&s));
+    /* a flush polls: a held key is still down, a press since is not queued, a quit the
+     * backend kept through the flush is seen at once */
+    lrv_key_set(&th_next_input, LRV_K_SPACE, 1);
+    th_next_input.nkeys = 1;
+    th_next_input.keys[0].key = LRV_K_B;
+    th_next_input.events = LRV_EV_QUIT | LRV_EV_MOUSE_L;
+    i = (int)th_frames;
+    lrv_sys_key_flush(&s);
+    CHECK(lrv_sys_quitting(&s) && th_frames == (uint32_t)i);
+    CHECK(lrv_sys_key_down(&s, LRV_K_SPACE) && !lrv_sys_key_sense(&s));
+    CHECK(!lrv_sys_mouse_pressed(&s, LRV_EV_MOUSE_L) && !lrv_sys_mouse_buttons(&s));
+    s.quit_requested = 0;
+    lrv_key_set(&th_next_input, LRV_K_SPACE, 0);
+    lrv_sys_frame_wait(&s);
 
     /* the CPU budget: 2.5 frames of work pass 2 frames and keep the rest */
     s.cpu_per_frame = 1000;

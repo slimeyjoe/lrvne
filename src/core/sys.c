@@ -114,6 +114,10 @@ void lrv_sys_key_flush(struct lrv_sys *s)
     s->hal->input_flush();
     s->khead = s->kcount = 0;
     s->edges = 0;
+    /* the input as it is now: a quit the flush kept for the next poll counts at once, not a
+     * frame later, and the levels are those after the flush */
+    if (!lrv_sys_quitting(s))
+        poll_input(s);
 }
 
 int lrv_sys_key_down(const struct lrv_sys *s, int key)

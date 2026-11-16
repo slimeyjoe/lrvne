@@ -39,8 +39,6 @@ Worked around in the engines today; each is a small, additive change here.
   less often accumulates it itself.
 - There is no helper to read one `key=value` from a META entry of a pack
   without declaring a profile field table.
-- `lrv_sys_key_flush` does not poll afterwards, so a quit requested during a
-  flush is seen one frame later.
 - The presentation test of a backend runs once an engine has opened its video
   mode, so it needs the engine's pack; a mode given on the command line would
   make it data-free again.

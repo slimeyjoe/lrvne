@@ -93,7 +93,9 @@ void lrv_sys_reset_done(struct lrv_sys *s);
 int  lrv_sys_key_sense(const struct lrv_sys *s);            /* a key press is waiting */
 /* Takes the oldest key press. Returns 0 when there is none. */
 int  lrv_sys_key_read(struct lrv_sys *s, struct lrv_keypress *k);
-void lrv_sys_key_flush(struct lrv_sys *s);                  /* also drops pending button edges */
+/* Drops the type-ahead and pending button edges, then polls: afterwards the input is as it is
+ * now, and a quit or reset the player asked for is already seen (lrv_sys_quitting). */
+void lrv_sys_key_flush(struct lrv_sys *s);
 int  lrv_sys_key_down(const struct lrv_sys *s, int key);
 unsigned lrv_sys_mods(const struct lrv_sys *s);             /* LRV_MOD_* now */
 unsigned lrv_sys_mouse_buttons(const struct lrv_sys *s);
