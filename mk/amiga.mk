@@ -10,5 +10,5 @@ override LRVNE_YMFM    := 0
 override LRVNE_CONTROL := 0
 # backends/amiga/core/paths.c is the AmigaDOS counterpart of the POSIX file
 LRVNE_BACKEND_SKIP := $(LRVNE)/backends/common/paths.c
-# release archives (after the rules of mk/lrvne.mk: they use $(EXE) and $(BUILD))
-LRVNE_TARGET_POST  := $(LRVNE)/mk/amiga-dist.mk
+# release archives and the rigs' checks (after the rules of mk/lrvne.mk: they use $(EXE) and $(BUILD))
+LRVNE_TARGET_POST  := $(LRVNE)/mk/amiga-dist.mk $(LRVNE)/mk/amiga-rig.mk

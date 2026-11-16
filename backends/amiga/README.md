@@ -497,9 +497,14 @@ headless (the presentation test on the own screen, with `ASPECT`, with
 `SCALE=2 ASPECT` and in a `WINDOW` on a true colour screen: every snapshot
 equal to the headless backend's, pixel for pixel; `PRESENTTESTMODE=pc98`
 with no pack, the same; scripted runs; pack
-discovery; storage; the options); the assembly loop as above. The 68k and
-WarpOS programs build and link; they have not been run since the backend was
-generalised. Before that, as part of one engine, the same code ran on a real
+discovery; storage; the options); the assembly loop as above. The rigs
+(`../../rigs/README.md`) run the presentation test of every target's program
+against the headless build: `make TARGET=amiga|warpos|aros lrvne-present`, and
+an engine's release archive with `lrvne-dist-check`. Since 2026-11-16 the 68k
+program of three engines ran in WinUAE (native, Picasso96, promoted, scaled and
+window screens; scripted game runs with snapshots), the WarpOS program's
+presentation test in the Blizzard PPC emulation. Before the backend was
+generalised, as part of one engine, the same code ran on a real
 A1200 with a 68040, in WinUAE (native, promoted and graphics card screens,
 Paula and AHI, the Blizzard PPC emulation for WarpOS), on a PowerPC board
 under a WarpOS-compatible system with AHI, and in AROS natively under QEMU.

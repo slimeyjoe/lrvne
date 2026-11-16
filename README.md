@@ -40,6 +40,7 @@ on it adds the interpreter and formats of one original engine; a game is then a
 | `backends/` | `null` (headless and deterministic, for tests), `sdl3` (the player), `amiga` (AmigaOS 3.x on the 68k, WarpOS, AROS: [its README](backends/amiga/README.md)); `common` is what they share (command line, pack and storage paths, scripted input, snapshots), `control` the test automation protocol |
 | `examples/demo` | a small engine that uses all of the above: read it first |
 | `tools/` | Python: the pack and font builders, readers of disk and CD images |
+| `rigs/` | the Amiga family's programs on emulated machines (WinUAE, WarpOS, hosted AROS) against the headless build: [its README](rigs/README.md) |
 | `fonts/`, `third_party/` | the bitmap fonts the glyph tables are built from; ymfm and the Opus decoder |
 | `docs/` | [the architecture](docs/architecture.md), [porting an engine onto lrvne](docs/porting-an-engine.md) |
 
@@ -78,6 +79,8 @@ make TARGET=sdl3     # the demo engine in a window: build/sdl3/lrvdemo
 make TARGET=amiga    # for AmigaOS 3.x (vbcc); also warpos, aros (backends/amiga/README.md)
 make check           # test, the tools' tests, the leak check
 make opn68k          # the 68k assembly FM loop against the C one, under qemu-m68k
+make TARGET=amiga lrvne-present LRVNE_PRESENT_ARGS="--mode pc98"   # the demo's presentation
+                     # test in WinUAE; also warpos, aros (rigs/README.md: the emulators)
 ```
 
 Build switches (`0` or `1`; changing one rebuilds what depends on it):

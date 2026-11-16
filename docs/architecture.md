@@ -206,6 +206,12 @@ Everything is tested without a human and without game data.
   the engine opens, or, with `--present-test-mode pc98` (`PRESENTTESTMODE`),
   in a machine's mode named on the command line without starting the engine,
   so it needs no game data (`lrvne/machine.h`).
+- **The rigs** (`rigs/`) run the Amiga family's programs on the machines they
+  are for, WinUAE (68k, WarpOS) and hosted AROS, and compare every snapshot
+  with the headless build's: the presentation test (`lrvne-present`),
+  release archives (`lrvne-dist-check`), and the pieces for
+  an engine's own scripted runs. They wait on events (the guest's requests,
+  the debugger's stop reply, the end of the commands), never on the clock.
 - **The control protocol** (`--control`, `backends/control/`) is for tests of a
   whole game. The engine's trace events come out as JSON lines on stdout, and
   the engine stops at well-defined points: when it waits for the player's
