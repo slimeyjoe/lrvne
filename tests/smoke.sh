@@ -42,6 +42,10 @@ bytes_of() {
 [ "$(wc -l <"$tmp/ptest")" -eq 25 ] || fail "--present-test: not 25 snapshots"
 [ "$(hash_of "$tmp/ptest" registration)" = 89dc5ad9 ] || fail "--present-test: first hash"
 [ "$(hash_of "$tmp/ptest" soak-4)" = 91c98518 ] || fail "--present-test: last hash"
+# ... in a machine's mode named on the command line, the engine not started: the same snapshots
+"$exe" --present-test-mode PC98 --pak "$tmp/none.pak" >"$tmp/ptest2" ||
+    fail "--present-test-mode exited with $?"
+cmp -s "$tmp/ptest" "$tmp/ptest2" || fail "--present-test-mode: other snapshots than --present-test"
 
 # ---- scripted input, snapshots, pictures, a storage record ----------------------------------
 mkdir "$tmp/store" "$tmp/shots"
@@ -181,7 +185,8 @@ for model in push pull; do
         [ "$(tail -c +45 "$tmp/game.wav" | tr -d '\000' | wc -c)" -gt 1000 ] ||
         fail "--wav --audio $model: no sound recorded"
 done
-for bad in "--nonsense" "--speed 9" "--autoplay at:5=nokey" "--render-wav $tmp/x.wav"; do
+for bad in "--nonsense" "--speed 9" "--autoplay at:5=nokey" "--render-wav $tmp/x.wav" \
+           "--present-test-mode x68000"; do
     rc=0
     # shellcheck disable=SC2086
     "$exe" --storage "$tmp/store" $bad >/dev/null 2>&1 || rc=$?

@@ -144,7 +144,7 @@ tool type is skipped (there is nowhere to say so).
 | `PRELOAD` | `auto` | read the whole pack into memory at start: `auto` when it fits in one block with 1.5 MB to spare, `yes` whenever it fits, `no` never |
 | `QUIET` | off | no console output |
 | `AUTOPLAY`, `MAXTICKS` | | scripted input (`backends/common/autoplay.h`); quote the spec, or `AUTOPLAY=@file` for a long one |
-| `FAST`, `SNAPDIR`, `PRESENTTEST` | | tests, see "Testing" |
+| `FAST`, `SNAPDIR`, `PRESENTTEST`, `PRESENTTESTMODE` | | tests, see "Testing" |
 
 `CONTROL` is in the list because it is in the common table; these builds have
 no control protocol and say so.
@@ -463,8 +463,10 @@ No test of these targets needs a human or game data.
 
 * **The presentation test.** `PRESENTTEST` runs the sequence of
   `backends/common/ptest.h` in the video mode the engine opens: every path of
-  a present, a snapshot after each step. The headless backend prints the same
-  snapshots (`--present-test`), which are the reference.
+  a present, a snapshot after each step. `PRESENTTESTMODE=pc98` runs it in that
+  machine's mode without starting the engine, so no pack is needed. The
+  headless backend prints the same snapshots (`--present-test`,
+  `--present-test-mode pc98`), which are the reference.
 * **Scripted runs.** `AUTOPLAY=spec` plays an input schedule; its `snap:`
   ticks take snapshots. `FAST` drops the frame pacing, `MAXTICKS` ends a run.
 * **Snapshots** (`core/snap.c`). For each one the program writes a request
@@ -483,7 +485,8 @@ No test of these targets needs a human or game data.
 What has been run in this form: the AROS build in hosted AROS on Linux,
 headless (the presentation test on the own screen, with `ASPECT`, with
 `SCALE=2 ASPECT` and in a `WINDOW` on a true colour screen: every snapshot
-equal to the headless backend's, pixel for pixel; scripted runs; pack
+equal to the headless backend's, pixel for pixel; `PRESENTTESTMODE=pc98`
+with no pack, the same; scripted runs; pack
 discovery; storage; the options); the assembly loop as above. The 68k and
 WarpOS programs build and link; they have not been run since the backend was
 generalised. Before that, as part of one engine, the same code ran on a real

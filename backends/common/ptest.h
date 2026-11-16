@@ -22,6 +22,7 @@
 #define LRVNE_BACKENDS_PTEST_H
 
 #include <stdint.h>
+#include "lrvne/app.h"
 #include "lrvne/hal.h"
 
 struct lrv_ptest_io {
@@ -34,5 +35,11 @@ struct lrv_ptest_io {
 /* Returns the number of snapshots taken, LRV_ERR_RANGE for a video mode the test does not
  * support (only LRV_FMT_PLANAR4, at least 64x64 and 16 colours), LRV_ERR_NOMEM. */
 int lrv_ptest_run(const struct lrv_video_mode *mode, const struct lrv_ptest_io *io);
+
+/* The presentation test without an engine: the video configuration a backend opens for it, in
+ * the mode of machine `machine` (lrvne/machine.h) with the display settings of the command
+ * line. The engine and its pack are not needed. Returns LRV_ERR_NOTFOUND for an unknown name. */
+int lrv_ptest_video_cfg(struct lrv_video_cfg *vc, const char *machine,
+                        const struct lrv_run_cfg *cfg, const char *title);
 
 #endif

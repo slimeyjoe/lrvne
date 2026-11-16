@@ -33,6 +33,3 @@ Worked around in the engines today; each is a small, additive change here.
 
 - Hooks can be added to an `lrv_sys` but not removed; an engine whose tick
   handler comes and goes keeps one permanent hook that dispatches.
-- The presentation test of a backend runs once an engine has opened its video
-  mode, so it needs the engine's pack; a mode given on the command line would
-  make it data-free again.

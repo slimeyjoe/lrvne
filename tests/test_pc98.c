@@ -3,6 +3,7 @@
  * PC-98 scan codes, BIOS characters and the key-down bitmap. The expected values are a table
  * written out key by key, independent of the tables in the module. */
 #include "test_hal.h"
+#include "lrvne/machine.h"
 #include "lrvne/pc98.h"
 
 #define NONE LRV_PC98_K_NONE
@@ -68,6 +69,10 @@ static void test_mode(void)
     }
     CHECK(m->colours == 16 && m->rgb_bits == 4);
     CHECK(LRV_PC98_STRIDE * 8 == LRV_PC98_W);
+    /* by name, for a backend without an engine */
+    CHECK(lrv_video_mode_by_name("pc98") == m && lrv_video_mode_by_name("PC98") == m);
+    CHECK(!lrv_video_mode_by_name("pc9") && !lrv_video_mode_by_name("pc988"));
+    CHECK(!lrv_video_mode_by_name("") && !strcmp(lrv_video_mode_names, "pc98"));
 }
 
 static void test_scan(void)

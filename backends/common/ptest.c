@@ -4,6 +4,7 @@
 #include <string.h>
 #include "lrvne/core.h"
 #include "lrvne/gfx.h"
+#include "lrvne/machine.h"
 #include "ptest.h"
 
 #define NPLANES 4
@@ -348,4 +349,19 @@ int lrv_ptest_run(const struct lrv_video_mode *mode, const struct lrv_ptest_io *
     free(mem);
     g_pal = 0;
     return g_nsnap;
+}
+
+int lrv_ptest_video_cfg(struct lrv_video_cfg *vc, const char *machine,
+                        const struct lrv_run_cfg *cfg, const char *title)
+{
+    const struct lrv_video_mode *m = lrv_video_mode_by_name(machine);
+    if (!m)
+        return LRV_ERR_NOTFOUND;
+    memset(vc, 0, sizeof *vc);
+    vc->mode = *m;
+    vc->title = title;
+    vc->fullscreen = cfg->fullscreen;
+    vc->scale_mode = cfg->scale_mode;
+    vc->host_mode = cfg->host_mode;
+    return LRV_OK;
 }

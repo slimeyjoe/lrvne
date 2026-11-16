@@ -19,6 +19,8 @@
  *   memory        --memstat prints the peak of the engine's allocations on stderr
  * --present-test runs the synthetic presentation test (ptest.h) in the video mode the engine
  * opens, prints its snapshots and exits: the reference for backends with a real display.
+ * --present-test-mode MACHINE runs it in that machine's mode (lrvne/machine.h) instead,
+ * without starting the engine, so it needs no game data.
  *
  * Differences from a player's backend, all for the sake of repeatable tests: the saves are
  * kept in the current directory unless --storage names another (never in the user's data
@@ -32,6 +34,7 @@
 #include <string.h>
 #include "lrvne/app.h"
 #include "lrvne/core.h"
+#include "lrvne/machine.h"
 #include "args.h"
 #include "autoplay.h"
 #include "control.h"
@@ -61,6 +64,7 @@ static int g_shot_every;
 static const char *g_shot_dir = ".";
 static int g_trace;
 static int g_present_test, g_present_ran;
+static const char *g_present_mode;      /* --present-test-mode: the machine, without the engine */
 static const char *g_render, *g_song;
 static double g_seconds = 30.0;
 static const char *g_game_wav;
@@ -363,6 +367,8 @@ static const struct lrv_option g_options[] = {
     { "shot-every", LRV_OPT_ARG, "N", "write every N-th frame as a PPM picture" },
     { "shot-dir", LRV_OPT_ARG, "DIR", "where the pictures go (default: here)" },
     { "present-test", LRV_OPT_FLAG, 0, "print the snapshots of the presentation test and exit" },
+    { "present-test-mode", LRV_OPT_ARG, "MACHINE",
+      "the same in that machine's video mode, without the game (pc98)" },
     { "wav", LRV_OPT_ARG, "FILE", "record what the engine plays" },
     { "audio", LRV_OPT_ARG, "push|pull", "how the pretend device gets the sound (default push)" },
     { "render-wav", LRV_OPT_ARG, "FILE", "play --song offline into FILE and exit" },
@@ -385,6 +391,11 @@ static int option(struct lrv_args *a, const char *name, const char *arg)
         g_shot_dir = arg;
     } else if (!strcmp(name, "present-test")) {
         g_present_test = 1;
+    } else if (!strcmp(name, "present-test-mode")) {
+        if (!lrv_video_mode_by_name(arg))
+            return 1;
+        g_present_test = 1;
+        g_present_mode = arg;
     } else if (!strcmp(name, "wav")) {
         g_game_wav = arg;
     } else if (!strcmp(name, "audio")) {
@@ -509,6 +520,12 @@ int lrv_app_main(const struct lrv_app *app, int argc, char **argv)
         if (!g_args.cfg.audio_rate)
             g_args.cfg.audio_rate = DEFAULT_RATE;
         return lrv_wav_render(app, &hal, &g_args.cfg, g_render, g_song, g_seconds);
+    }
+    if (g_present_mode) {
+        struct lrv_video_cfg vc;
+        lrv_ptest_video_cfg(&vc, g_present_mode, &g_args.cfg, app->name);
+        v_open(&vc);                    /* runs the test and exits, unless the mode is refused */
+        return 1;
     }
     if (g_game_wav && !g_args.cfg.audio_rate)
         g_args.cfg.audio_rate = DEFAULT_RATE;

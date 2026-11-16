@@ -197,7 +197,10 @@ Everything is tested without a human and without game data.
   fixed sequence of presents through every path of a `video_present`. Its
   snapshot hashes are the reference for a backend with a real display: the
   Amiga backend runs the same sequence on its screen (`PRESENTTEST`) and, on
-  AROS, reads every snapshot back from it for comparison.
+  AROS, reads every snapshot back from it for comparison. It runs in the mode
+  the engine opens, or, with `--present-test-mode pc98` (`PRESENTTESTMODE`),
+  in a machine's mode named on the command line without starting the engine,
+  so it needs no game data (`lrvne/machine.h`).
 - **The control protocol** (`--control`, `backends/control/`) is for tests of a
   whole game. The engine's trace events come out as JSON lines on stdout, and
   the engine stops at well-defined points: when it waits for the player's

@@ -45,6 +45,7 @@ struct am_opts {
     int quiet;              /* QUIET: no console output */
     int fast;               /* FAST: no frame pacing, the engine runs as fast as it can (tests) */
     int present_test;       /* PRESENTTEST: run the synthetic presentation test (ptest.h) */
+    const char *present_mode; /* PRESENTTESTMODE=machine: the same in that mode, no engine */
     const char *snapdir;    /* SNAPDIR=dir: where snapshot requests go (default PROGDIR:) */
     const char *preload;    /* PRELOAD=auto|yes|no: the whole pack into fast RAM (default auto) */
     const char *upload;     /* UPLOAD=name: the graphics card upload (video.c, upload.h) */

@@ -15,7 +15,8 @@
  * Test options: the autoplay spec's snap: ticks make the program pause and hand a snapshot to
  * a test rig on the host (snap.c); FAST drops the frame pacing (an engine is deterministic
  * tick for tick, so the snapshots do not change); PRESENTTEST runs the synthetic presentation
- * test (backends/common/ptest.h) in the video mode the engine opens, instead of the game.
+ * test (backends/common/ptest.h) in the video mode the engine opens, instead of the game;
+ * PRESENTTESTMODE=pc98 runs it in that machine's mode without starting the engine at all.
  *
  * README.md describes the backend as a whole. */
 #include "os_begin.h"
@@ -39,6 +40,7 @@
 #include <string.h>
 #include "amiga.h"
 #include "lrvne/gfx.h"
+#include "lrvne/machine.h"
 #include "lrvne/scale.h"
 #include "args.h"
 #include "autoplay.h"
@@ -146,7 +148,9 @@ static const struct lrv_option g_options[] = {
     { "help", LRV_OPT_FLAG, 0, "this list" },
     { "fast", LRV_OPT_FLAG, 0, "testing: no frame pacing" },
     { "snapdir", LRV_OPT_ARG, "DIR", "testing: where snapshot requests go (default PROGDIR:)" },
-    { "present-test", LRV_OPT_FLAG, 0, "testing: run the presentation test and exit" }
+    { "present-test", LRV_OPT_FLAG, 0, "testing: run the presentation test and exit" },
+    { "present-test-mode", LRV_OPT_ARG, "MACHINE",
+      "testing: the same in that machine's mode (pc98), without the game" }
 };
 
 /* a decimal or 0x hexadecimal number and nothing else */
@@ -219,6 +223,11 @@ static int option(struct lrv_args *a, const char *name, const char *arg)
         am_opts.snapdir = arg;
     } else if (!strcmp(name, "present-test")) {
         am_opts.present_test = 1;
+    } else if (!strcmp(name, "present-test-mode")) {
+        if (!lrv_video_mode_by_name(arg))
+            return 1;
+        am_opts.present_test = 1;
+        am_opts.present_mode = arg;
     } else {
         return 1;
     }
@@ -778,6 +787,15 @@ static int run(void)
     hal.log = l_log;
     hal.fatal = l_fatal;
 
+    if (am_opts.present_mode) {
+        struct lrv_video_cfg vc;
+        lrv_ptest_video_cfg(&vc, am_opts.present_mode, &g_args.cfg, am_app->name);
+        v_open(&vc);                    /* runs the test and exits, unless the mode is refused */
+        am_log("%s: PRESENTTESTMODE: the video mode could not be opened\n", am_app->name);
+        report(RETURN_FAIL);
+        shutdown();
+        return RETURN_FAIL;
+    }
     rc = am_app->run(am_app->ctx, &hal, &g_args.cfg);
 
     if (am_opts.present_test) {
