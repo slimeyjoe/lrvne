@@ -8,9 +8,7 @@ implemented.
 | Need | Size | Effect on existing interfaces |
 |---|---|---|
 | Palette helpers: add-and-clamp shift of all components; a step that only decrements | small | additive (`gfx.h`) |
-| Font builder input from a raw glyph array (a font embedded in a program file) | small | additive (`tools/lrvne/xfont.py`) |
 | Glyph helpers: plain OR bold (no gap kept), transparent OR, inverse, outline, double size | small | additive (`font.h`) |
-| EXEPACK unpacker for program files that hold game data | small | additive (tools) |
 | YM2608 (OPNA) core: six FM channels, SSG, ADPCM-B; the vendored ymfm contains it | medium | a new ops structure and queue variant is additive; a register-bank bit in `opn.h` / `opnq.h` would change them |
 | A PCM channel in the sound path, for sample playback beside the FM chip (not voice clips) | medium | additive (`mixer.h`) |
 | Stereo output: HAL `audio_open`, mixer, every backend | large | changes interfaces; decide before 1.0. A mono downmix of a stereo chip needs none of it |
@@ -27,3 +25,7 @@ queue), keys that register on release (the key-down map's edge), effects timed
 by CPU speed (`lrv_sys_cpu`, with a reference speed that has to be measured),
 and interpreters that poll a music driver in a loop with no wait (charge CPU
 work per statement so time passes).
+
+Done since the surveys: the font builder takes a raw glyph array, a font embedded in a
+program file (`xfont` `add_raw`, `--raw`); `tools/lrvne/exepack.py` undoes EXEPACK on the
+program files that hold game data.

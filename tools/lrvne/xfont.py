@@ -46,8 +46,13 @@ engine draws itself, say) from the caller:
     t.add_glyph(0x7621, rows)           # 16 ints, bit 15 = leftmost pixel; stored as given
     data = t.build()
 
+A raw array of glyph bitmaps (a program's own font, cut out of its executable) is added with
+`add_raw(data, codes, offset, stride)`, or on the command line with --raw FILE@OFFSET:FIRST-LAST
+(numbers in hex; the glyphs of codes FIRST..LAST one cell after the other from OFFSET).
+
 Command line (python3 -I tools/lrvne xfont ...):
-  xfont [--no-bold] [--bold auto|left|right] [--cell 8|16] -o OUT.xfnt FONT [FONT...]
+  xfont [--no-bold] [--bold auto|left|right] [--cell 8|16] [--raw SPEC ...] -o OUT.xfnt
+        [FONT...]
   xfont --info TABLE.xfnt
 """
 import argparse
@@ -380,6 +385,29 @@ class FontTable:
             raise FontError('code %#x does not fit 16 bits' % code)
         self.glyphs[code] = list(rows)
 
+    def add_raw(self, data: bytes, codes: Sequence[int], offset: int = 0,
+                stride: Optional[int] = None) -> None:
+        """Adds glyphs stored one after another as bitmaps: the glyph of codes[i] starts at
+        offset + i * stride (stride default: one cell, cell_h * cell_w/8 bytes), its rows top
+        to bottom, cell_w/8 bytes each, the most significant bit of the first byte leftmost.
+        That is how a program's own font usually sits in its executable."""
+        if self.cell_w is None:
+            raise FontError('the cell width is not known yet: add a font first, or state it')
+        bpr = self.cell_w // 8
+        size = self.cell_h * bpr
+        stride = size if stride is None else stride
+        if stride < size or offset < 0:
+            raise FontError('raw glyphs: stride %d is less than a cell of %d bytes' % (stride, size))
+        end = offset + (len(codes) - 1) * stride + size if codes else offset
+        if end > len(data):
+            raise FontError('raw glyphs: %d glyphs need %d bytes from offset %#x, %d there'
+                            % (len(codes), end - offset, offset, len(data) - offset))
+        for i, code in enumerate(codes):
+            p = offset + i * stride
+            rows = [int.from_bytes(data[p + r * bpr:p + (r + 1) * bpr], 'big')
+                    for r in range(self.cell_h)]
+            self.add_glyph(code, rows)
+
     def add_file(self, path: str) -> None:
         """Adds a font file: extra glyphs (.txt), PCF or BDF, gzipped or not."""
         data = read_font_file(path)
@@ -419,6 +447,20 @@ class FontTable:
         return write_xfnt(self.cell_w, self.cell_h, self.bold, self.glyphs)
 
 
+def parse_raw_spec(spec: str) -> Tuple[str, int, List[int]]:
+    """FILE@OFFSET:FIRST-LAST (or :CODE) -> (file, offset, codes); numbers in hex."""
+    try:
+        path, rest = spec.rsplit('@', 1)
+        off, rng = rest.split(':', 1)
+        first, _, last = rng.partition('-')
+        lo, hi = int(first, 16), int(last or first, 16)
+        if not path or hi < lo:
+            raise ValueError
+        return path, int(off, 16), list(range(lo, hi + 1))
+    except ValueError:
+        raise FontError('--raw %r: expected FILE@OFFSET:FIRST-LAST (hex)' % spec) from None
+
+
 def convert(paths: Sequence[str], no_bold: bool = False, bold: str = 'auto',
             cell_w: Optional[int] = None, cell_h: int = 16,
             extra: Optional[Glyphs] = None) -> bytes:
@@ -449,6 +491,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument('--cell', type=int, choices=(8, 16), help='force the cell width')
     ap.add_argument('--height', type=int, default=16, help='cell height (default 16)')
     ap.add_argument('--info', metavar='TABLE', help='describe an XFNT table instead')
+    ap.add_argument('--raw', action='append', default=[], metavar='FILE@OFFSET:FIRST-LAST',
+                    help='glyph bitmaps one cell after another in FILE from OFFSET, for codes '
+                         'FIRST..LAST (hex); added after the fonts, needs the cell width')
     a = ap.parse_args(argv)
     try:
         if a.info:
@@ -459,11 +504,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                   % (a.info, len(codes), cell_w, cell_h, ', emboldened' if bold else '',
                      codes[0] if codes else 0, codes[-1] if codes else 0))
             return 0
-        if not a.fonts or not a.output:
-            ap.error('fonts and -o OUT are required')
+        if not (a.fonts or a.raw) or not a.output:
+            ap.error('fonts (or --raw) and -o OUT are required')
         table = FontTable(a.cell, a.height)
         for path in a.fonts:
             table.add_file(path)
+        for spec in a.raw:
+            path, offset, codes = parse_raw_spec(spec)
+            with open(path, 'rb') as f:
+                table.add_raw(f.read(), codes, offset)
         if not a.no_bold:
             used = table.first_column_users()
             direction = table.embolden(a.bold)

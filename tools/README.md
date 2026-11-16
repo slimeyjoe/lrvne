@@ -16,7 +16,8 @@ files make up a game, and what they are, is an engine's inventory and an engine'
 | `inventory` | the import framework: an inventory TSV (name, size, md5), `scan`, `import`, `check` |
 | `xpak` | the asset pack of `include/lrvne/pack.h`: writer, reader, bundling into an executable |
 | `profile` | the game profile text of `include/lrvne/profile.h` |
-| `xfont` | BDF/PCF bitmap fonts to XFNT glyph tables |
+| `xfont` | BDF/PCF bitmap fonts, extra glyphs and raw glyph arrays to XFNT glyph tables |
+| `exepack` | undoes Microsoft EXEPACK on DOS executables that hold game data (tables, fonts, texts) |
 | `voicepack` | the voice pack: clips, the `voice` description, optional Opus transcoding |
 | `pmd` | PMD 4.7g data for the PMD module: the SSG-effect table out of a player's PMD.COM; the test songs |
 

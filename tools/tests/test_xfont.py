@@ -228,6 +228,40 @@ class Convert(unittest.TestCase):
         with self.assertRaisesRegex(xfont.FontError, '8 pixels wide'):
             t.add_art(ART.encode('utf-8'))
 
+    def test_raw_glyph_arrays(self):
+        rows8 = [bytes(range(r, r + 16)) for r in (0x10, 0x40)]
+        data = b'\xEE' * 3 + rows8[0] + b'\x00\x00' + rows8[1]      # offset 3, stride 18
+        t = xfont.FontTable(8)
+        t.add_raw(data, [0x41, 0x42], offset=3, stride=18)
+        self.assertEqual(t.glyphs[0x41], list(range(0x10, 0x20)))
+        self.assertEqual(t.glyphs[0x42], list(range(0x40, 0x50)))
+        t16 = xfont.FontTable(16)
+        t16.add_raw(bytes(range(32)), [0x2121])                       # rows are big-endian
+        self.assertEqual(t16.glyphs[0x2121][0], 0x0001)
+        self.assertEqual(t16.glyphs[0x2121][15], 0x1E1F)
+        with self.assertRaises(xfont.FontError):
+            t.add_raw(data, [1, 2, 3], offset=3, stride=18)          # runs past the end
+        with self.assertRaises(xfont.FontError):
+            t.add_raw(data, [1], stride=8)                           # less than a cell
+        with self.assertRaises(xfont.FontError):
+            xfont.FontTable().add_raw(data, [1])                     # no cell width yet
+        self.assertEqual(xfont.parse_raw_spec('a@b.bin@10:41-43'), ('a@b.bin', 0x10, [0x41, 0x42, 0x43]))
+        self.assertEqual(xfont.parse_raw_spec('f@0:7F'), ('f', 0, [0x7F]))
+        for bad in ('f:41', 'f@x:41', 'f@0:43-41', '@0:41'):
+            with self.assertRaises(xfont.FontError):
+                xfont.parse_raw_spec(bad)
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = os.path.join(tmp, 'GAME.EXE')
+            out = os.path.join(tmp, 'ank.xfnt')
+            with open(raw, 'wb') as f:
+                f.write(bytes(5) + bytes(range(32)))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(xfont.main(['--no-bold', '--cell', '8', '--raw',
+                                             raw + '@5:30-31', '-o', out]), 0)
+            with open(out, 'rb') as f:
+                table = xfont.read_xfnt(f.read())[3]
+            self.assertEqual(table, {0x30: list(range(16)), 0x31: list(range(16, 32))})
+
     def test_codes_beyond_16_bits_are_left_out(self):
         t = xfont.FontTable()
         t.add_bdf(BDF8.replace('ENCODING 177', 'ENCODING 131072').encode('latin-1'))
