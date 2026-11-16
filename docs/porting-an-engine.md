@@ -62,6 +62,8 @@ with a `struct lrv_sys` in the engine's state.
 - every wait becomes a loop around `lrv_sys_frame_wait`;
 - per-frame work moves into hooks: `LRV_HOOK_PUMP` for what runs before the
   present, `LRV_HOOK_TICK` for what the original did in its refresh interrupt;
+- a mouse driver's motion counter is `sys.motion_x` / `motion_y`: every poll
+  adds to it, the engine clears or subtracts what it used;
 - loops test `lrv_sys_quitting`; the top level handles `lrv_sys_resetting`;
 - busy loops that the original timed by CPU speed call `lrv_sys_cpu`.
 

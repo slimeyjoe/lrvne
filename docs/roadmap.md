@@ -33,8 +33,6 @@ Worked around in the engines today; each is a small, additive change here.
 
 - Hooks can be added to an `lrv_sys` but not removed; an engine whose tick
   handler comes and goes keeps one permanent hook that dispatches.
-- Relative mouse motion is that of the last poll only; an engine that reads it
-  less often accumulates it itself.
 - There is no helper to read one `key=value` from a META entry of a pack
   without declaring a profile field table.
 - The presentation test of a backend runs once an engine has opened its video

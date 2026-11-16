@@ -358,6 +358,64 @@ static void test_trace(void)
     CHECK(traced.text == m0 && traced.a3 == 4 && traced.pos == 0x123 && ntraced == 4);
 }
 
+static void warp_to(int x, int y) { (void)x; (void)y; }
+
+static void test_motion(void)
+{
+    struct lrv_hal hal;
+    struct lrv_sys s;
+
+    th_hal(&hal);
+    hal.mouse_warp = warp_to;
+    memset(&th_next_input, 0, sizeof th_next_input);
+    lrv_sys_init(&s, &hal, 640, 400);
+    CHECK(s.motion_x == 0 && s.motion_y == 0);
+
+    /* relative: every poll adds, past the edge of the screen where the pointer stops */
+    th_next_input.mouse_dx = 300;
+    th_next_input.mouse_dy = -3;
+    lrv_sys_frame_wait(&s);
+    lrv_sys_frame_wait(&s);
+    CHECK(s.motion_x == 600 && s.motion_y == -6 && s.mouse_x == 639);
+    s.motion_x -= 550;                  /* the engine takes part of it */
+    th_next_input.mouse_dx = th_next_input.mouse_dy = 0;
+    lrv_sys_frame_wait(&s);
+    CHECK(s.motion_x == 50 && s.motion_y == -6);
+
+    /* absolute: how far the host pointer moved; where it first appears is no motion */
+    s.motion_x = s.motion_y = 0;
+    th_next_input.mouse_abs = 1;
+    th_next_input.mouse_x = 100;
+    th_next_input.mouse_y = 100;
+    lrv_sys_frame_wait(&s);
+    CHECK(s.motion_x == 0 && s.motion_y == 0);
+    th_next_input.mouse_x = 130;
+    th_next_input.mouse_y = 90;
+    lrv_sys_frame_wait(&s);
+    lrv_sys_frame_wait(&s);                 /* not moved: nothing added */
+    CHECK(s.motion_x == 30 && s.motion_y == -10);
+
+    /* the engine's warp is not motion; the player's motion after it is */
+    lrv_sys_mouse_set(&s, 320, 200);
+    th_next_input.mouse_x = 321;
+    th_next_input.mouse_y = 200;
+    lrv_sys_frame_wait(&s);
+    CHECK(s.motion_x == 31 && s.motion_y == -10 && s.mouse_x == 321);
+
+    /* a flush keeps it; back to relative, the absolute position is forgotten */
+    lrv_sys_key_flush(&s);
+    CHECK(s.motion_x == 31);
+    th_next_input.mouse_abs = 0;
+    th_next_input.mouse_dx = 1;
+    lrv_sys_frame_wait(&s);
+    th_next_input.mouse_abs = 1;
+    th_next_input.mouse_x = 0;
+    th_next_input.mouse_dx = 0;
+    lrv_sys_frame_wait(&s);
+    CHECK(s.motion_x == 32 && s.motion_y == -10);  /* the relative 1; no jump from 321 to 0 */
+    memset(&th_next_input, 0, sizeof th_next_input);
+}
+
 static void test_keys(void)
 {
     int k;
@@ -383,6 +441,7 @@ int main(void)
     test_profile_pack();
     test_sys();
     test_trace();
+    test_motion();
     test_keys();
     if (th_fails) {
         fprintf(stderr, "test_core: %d failed\n", th_fails);

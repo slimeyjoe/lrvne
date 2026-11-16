@@ -60,9 +60,19 @@ static void poll_input(struct lrv_sys *s)
             s->mouse_x = in.mouse_x;
             s->mouse_y = in.mouse_y;
         }
+        if (s->host_known) {
+            s->motion_x += in.mouse_x - s->host_x;
+            s->motion_y += in.mouse_y - s->host_y;
+        }
+        s->host_x = in.mouse_x;
+        s->host_y = in.mouse_y;
+        s->host_known = 1;
     } else {
         s->mouse_x += in.mouse_dx;
         s->mouse_y += in.mouse_dy;
+        s->motion_x += in.mouse_dx;
+        s->motion_y += in.mouse_dy;
+        s->host_known = 0;
     }
     clamp_pointer(s);
     s->in = in;
@@ -149,8 +159,12 @@ void lrv_sys_mouse_set(struct lrv_sys *s, int x, int y)
     s->mouse_x = x;
     s->mouse_y = y;
     clamp_pointer(s);
-    if (s->hal->mouse_warp)
+    if (s->hal->mouse_warp) {
         s->hal->mouse_warp(s->mouse_x, s->mouse_y);
+        /* the host pointer jumps there: not the player's motion */
+        s->host_x = s->mouse_x;
+        s->host_y = s->mouse_y;
+    }
 }
 
 /* ---- frames ---------------------------------------------------------------------------- */

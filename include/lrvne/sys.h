@@ -44,6 +44,13 @@ struct lrv_sys {
     unsigned edges;                         /* LRV_EV_MOUSE_* not yet consumed */
     int mouse_x, mouse_y;                   /* the pointer the engine works with */
     int ptr_w, ptr_h;                       /* its bounds: the video mode's size */
+    /* The pointer's motion since the engine last cleared it, in video mode pixels and not
+     * bounded by the screen: a mouse driver's motion counter. Every poll adds to it, the
+     * relative motion or how far an absolute host pointer moved; the engine reads it and
+     * clears or subtracts what it used, when and as much as it likes. Nothing else changes
+     * it: a flush keeps it, and lrv_sys_mouse_set moving the host pointer does not count. */
+    int motion_x, motion_y;
+    int host_x, host_y, host_known;         /* where the absolute host pointer was last */
     int quit_requested, emergency_quit, reset_requested;
 
     /* time */
@@ -101,7 +108,7 @@ unsigned lrv_sys_mods(const struct lrv_sys *s);             /* LRV_MOD_* now */
 unsigned lrv_sys_mouse_buttons(const struct lrv_sys *s);
 /* Consumes press edges (LRV_EV_MOUSE_L / _R): 1 if any of `ev` happened since last consumed. */
 int  lrv_sys_mouse_pressed(struct lrv_sys *s, unsigned ev);
-/* Moves the pointer (the host's too, where the backend can). */
+/* Moves the pointer (the host's too, where the backend can); not counted as motion. */
 void lrv_sys_mouse_set(struct lrv_sys *s, int x, int y);
 
 /* ---- trace ---------------------------------------------------------------------------- */

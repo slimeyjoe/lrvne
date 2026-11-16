@@ -87,8 +87,9 @@ every backend and host, which is what tests compare pictures by.
 - **Input.** Keys by position (`lrvne/input.h`), presses in a queue with the
   US layout's character, levels in a bitmap; caps and kana are lock states;
   the pointer absolute or relative; quit, emergency quit and reset as events
-  that a flush never drops. Above the HAL, a flush in `lrv_sys` polls again,
-  so a quit is seen at once.
+  that a flush never drops. Above the HAL, `lrv_sys` keeps the pointer's
+  motion in a counter the engine reads and clears as a mouse driver's (either
+  kind of pointer), and a flush polls again, so a quit is seen at once.
 - **Audio.** Mono 16-bit. *Push*: the engine renders from its frame into
   `audio_space` / `audio_push`. *Pull* (`audio_lock` is not NULL): the backend
   calls the `struct lrv_audio_source` it was opened with from its audio thread
