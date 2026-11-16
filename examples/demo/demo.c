@@ -11,9 +11,9 @@
  *   font.h     text through a glyph table, when the pack has one ("latin8", "wide16")
  *   sys.h      the frame loop with the screen's present and the mixer's pump hooked in, the
  *              input queue, quit and reset, trace events for test automation
- *   mixer.h    the audio stream in whichever delivery model the backend has, in front of
- *   opnq.h     a register-write queue and an FM chip core, driven by a clock-driven
- *   opn.h      sequencer: a tune written directly as register writes
+ *   music.h    the sound path, assembled: the audio stream (mixer.h) in whichever delivery
+ *   opnq.h     model the backend has, in front of a register-write queue and an FM chip
+ *   opn.h      core, driven by a clock-driven sequencer: a tune written as register writes
  *   hal.h      a storage record (how many times the demo ran)
  *
  * On the screen: sixteen colour bars whose palette rotates, a block that crosses the screen
@@ -29,7 +29,7 @@
 #include "lrvne/font.h"
 #include "lrvne/gfx.h"
 #include "lrvne/mixer.h"
-#include "lrvne/opnq.h"
+#include "lrvne/music.h"
 #include "lrvne/pack.h"
 #include "lrvne/pc98.h"
 #include "lrvne/profile.h"
@@ -82,8 +82,7 @@ struct demo {
     uint8_t ptr_under[4][POINTER_H][2]; /* what it covers */
 
     /* sound; in pull mode the sequencer runs on the audio thread, under the audio lock */
-    struct lrv_mixer mixer;
-    struct lrv_opnq opnq;
+    struct lrv_music music;
     uint64_t seq_next;                  /* the master clock of the next note */
     int seq_step;
     int blip;                           /* an SSG tone period asked for by the game, 0 = none */
@@ -194,7 +193,7 @@ static void demo_draw_screen(struct demo *d)
 
 static void demo_reg(struct demo *d, uint64_t clock, int reg, int val)
 {
-    lrv_opnq_write_at(&d->opnq, clock, (uint8_t)reg, (uint8_t)val);
+    lrv_opnq_write_at(&d->music.q, clock, (uint8_t)reg, (uint8_t)val);
 }
 
 /* The sequencer, what a music driver is to an engine: the queue asks it to perform everything
@@ -228,9 +227,9 @@ static void demo_seq_run(void *ctx, uint64_t clock)
  * call into what it reads is bracketed with the mixer's lock (a no-op where audio is pushed). */
 static void demo_beep(struct demo *d, int hz)
 {
-    lrv_mixer_lock(&d->mixer);
+    lrv_mixer_lock(&d->music.mixer);
     d->blip = (int)(LRV_OPN_CLOCK_PC98 / 64) / hz;          /* the SSG's tone period */
-    lrv_mixer_unlock(&d->mixer);
+    lrv_mixer_unlock(&d->music.mixer);
 }
 
 /* The chip as the driver expects to find it, and the tune from its start. */
@@ -243,69 +242,43 @@ static void demo_sound_reset(struct demo *d)
         { 0x0B, 0x49 }, { 0x0C, 0x02 }      /* which takes 150 ms */
     };
     size_t i;
-    lrv_mixer_lock(&d->mixer);
-    lrv_opnq_reset(&d->opnq);
+    lrv_mixer_lock(&d->music.mixer);
+    lrv_opnq_reset(&d->music.q);
     for (i = 0; i < sizeof patch / sizeof patch[0]; i++)
-        lrv_opnq_poke(&d->opnq, patch[i][0], patch[i][1]);  /* at once, past the queue */
+        lrv_opnq_poke(&d->music.q, patch[i][0], patch[i][1]);  /* at once, past the queue */
     d->seq_next = 0;
     d->seq_step = d->blip = 0;
-    lrv_mixer_unlock(&d->mixer);
+    lrv_mixer_unlock(&d->music.mixer);
 }
 
-static int demo_chip(struct demo *d, const struct lrv_opn_ops *ops, unsigned flags,
-                     uint32_t rate)
-{
-    struct lrv_opnq_cfg qc;
-    memset(&qc, 0, sizeof qc);
-    qc.ops = ops;
-    qc.core_flags = flags;
-    qc.clock_hz = LRV_OPN_CLOCK_PC98;
-    qc.rate = rate;
-    qc.bus_clocks = LRV_OPN_FM_DIV;         /* writes reach the chip one FM sample apart */
-    qc.queue_size = 64;
-    qc.seq.ctx = d;
-    qc.seq.run_until = demo_seq_run;
-    return lrv_opnq_init(&d->opnq, d->hal, &qc);
-}
-
-/* The sound path: sequencer -> write queue -> chip core -> mixer -> the HAL's stream. A core
- * may insist on a rate of its own (ymfm renders at clock / 72), so the chip is created first
- * and the device asked for the chip's rate; a device that insists on another gets a core that
- * renders at any. Returns the rate the mix is rendered at, 0 without a chip. */
+/* The sound path: sequencer -> write queue -> chip core -> mixer -> the HAL's stream, which
+ * lrv_music assembles (the core chosen, the device's rate agreed). Offline the device is not
+ * opened and the mixer only renders. Returns the rate the mix is rendered at, 0 without a
+ * chip. */
 static uint32_t demo_sound_open(struct demo *d, const struct lrv_run_cfg *cfg, int device)
 {
-    struct lrv_mixer_cfg mc;
-    uint32_t rate;
-    int got;
+    struct lrv_music_cfg mc;
 
     memset(&mc, 0, sizeof mc);
-    mc.render = lrv_opnq_render;
-    mc.skip = lrv_opnq_skip;                /* for a backend that falls behind */
-    mc.ctx = &d->opnq;
-    lrv_mixer_init(&d->mixer, d->hal, &mc);
-    if (demo_chip(d, lrv_opn_select(cfg->opn_core), lrv_opn_flags(cfg->opn_core),
-                  (uint32_t)cfg->audio_rate) != LRV_OK)
+    mc.seq.ctx = d;
+    mc.seq.run_until = demo_seq_run;
+    mc.core = cfg->opn_core;
+    mc.rate = cfg->audio_rate;
+    mc.clock_hz = LRV_OPN_CLOCK_PC98;
+    mc.bus_clocks = LRV_OPN_FM_DIV;         /* writes reach the chip one FM sample apart */
+    mc.queue_size = 64;
+    mc.flags = device ? 0 : LRV_MUSIC_OFFLINE;
+    if (lrv_music_open(&d->music, d->hal, &mc) != LRV_OK)
         lrv_fatal(d->hal, "demo: cannot create the sound chip");
-    rate = lrv_opnq_rate(&d->opnq);
-    got = device && rate ? lrv_mixer_open(&d->mixer, (int)rate) : 0;
-    if (got && (uint32_t)got != rate &&
-        lrv_opnq_set_rate(&d->opnq, (uint32_t)got) != (uint32_t)got) {
-        lrv_opnq_free(&d->opnq);            /* nothing renders before lrv_mixer_start */
-        if (demo_chip(d, &lrv_opn_lite_ops, lrv_opn_flags(cfg->opn_core), (uint32_t)got) !=
-            LRV_OK)
-            lrv_fatal(d->hal, "demo: cannot create the sound chip");
-    }
-    rate = lrv_opnq_rate(&d->opnq);
-    lrv_mixer_set_volume(&d->mixer, cfg->volume < 0 ? 0 : cfg->volume ? cfg->volume : 100);
+    lrv_mixer_set_volume(&d->music.mixer, cfg->volume < 0 ? 0 : cfg->volume ? cfg->volume : 100);
     demo_sound_reset(d);
-    lrv_mixer_start(&d->mixer, rate);
-    return rate;
+    lrv_music_start(&d->music);
+    return lrv_music_has_chip(&d->music) ? lrv_music_rate(&d->music) : 0;
 }
 
 static void demo_sound_close(struct demo *d)
 {
-    lrv_mixer_close(&d->mixer);             /* first: the sources are not called after it */
-    lrv_opnq_free(&d->opnq);
+    lrv_music_close(&d->music);
 }
 
 /* ---- one frame ---------------------------------------------------------------------------- */
@@ -454,7 +427,7 @@ static int demo_run(void *ctx, const struct lrv_hal *hal, const struct lrv_run_c
     lrv_sys_init(&d->sys, hal, video.mode.w, video.mode.h);
     lrv_sys_set_present(&d->sys, lrv_screen_present_hook, &d->screen);
     demo_sound_open(d, cfg, 1);
-    lrv_sys_add_hook(&d->sys, LRV_HOOK_PUMP, lrv_mixer_pump, &d->mixer);
+    lrv_sys_add_hook(&d->sys, LRV_HOOK_PUMP, lrv_mixer_pump, &d->music.mixer);
     demo_count_run(d);
 
     for (;;) {                                      /* a reset comes back here */
@@ -498,7 +471,7 @@ static int demo_render_music(void *ctx, const struct lrv_hal *hal, const struct 
     *rate = demo_sound_open(d, cfg, 0);
     for (left = (long)(seconds * *rate); left > 0; left -= 512) {
         int n = left > 512 ? 512 : (int)left;
-        lrv_mixer_render(&d->mixer, buf, n);
+        lrv_mixer_render(&d->music.mixer, buf, n);
         sink(sctx, buf, n);
     }
     demo_sound_close(d);

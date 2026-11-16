@@ -141,15 +141,18 @@ Its `run` function, in the order the demo has it:
 2. `hal->video_open` with the machine's mode and the profile's title;
    `lrv_screen_init`; overlays;
 3. `lrv_sys_init`, `lrv_sys_set_present(lrv_screen_present_hook)`;
-4. the sound path: sequencer → `lrv_opnq` → core → `lrv_mixer` →
-   `lrv_mixer_open`; `lrv_mixer_pump` as a pump hook; the voice player;
+4. the sound path: sequencer → `lrv_opnq` → core → `lrv_mixer` → device,
+   assembled by `lrv_music_open`; `lrv_mixer_pump` as a pump hook; the voice
+   player;
 5. `hal->storage_open(profile.id)`;
 6. the game: a loop that a reset re-enters, built from waits around
    `lrv_sys_frame_wait`, reporting what it does with `lrv_sys_trace`;
 7. close in the opposite order.
 
-Sound in more detail. A music driver ("sequencer") stays in the engine; the
-library runs it in sample time. `lrv_opnq_render` asks the sequencer to perform
+Sound in more detail. A music driver ("sequencer") belongs to the engine
+unless more than one engine uses it; a shared one is an optional lrvne module
+(`lrvne/pmd.h`). Either way the library runs it in sample time.
+`lrv_opnq_render` asks the sequencer to perform
 everything up to the end of the block it renders, applies its register writes
 at the samples they fall on (spaced as the chip's bus spaced them) and renders
 the core in between. A *clock-driven* sequencer counts master clocks and
@@ -157,6 +160,10 @@ stamps its writes (`lrv_opnq_write_at`); a *frame-driven* one counts output
 samples and has the runs between its events rendered through a callback
 (`lrv_opnq_write`, `lrv_opnq_span`). The mixer scales the result, adds the
 voice where the backend mixes it, and delivers in the backend's model.
+`lrvne/music.h` assembles this path for an engine: the core the user chose,
+created before the device so that the device is asked for the core's rate,
+the light core when the device insists on another, the driver's time kept by
+the frames when there is no device, and the offline renderer.
 
 ## Game profiles
 

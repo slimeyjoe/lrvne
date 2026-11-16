@@ -105,11 +105,11 @@ recorded snapshots.
 
 ## 5. Sound
 
-The driver stays; its plumbing goes. Create an `lrv_opnq` in front of a core
-(`lrv_opn_select(cfg->opn_core)`, its flags `lrv_opn_flags(cfg->opn_core)`) and a
-mixer whose main source is `lrv_opnq_render` and whose skip hook is
-`lrv_opnq_skip`. Which kind of queue
-depends on how the driver keeps time:
+The driver stays (unless lrvne has it as a module: `lrvne/pmd.h`); its
+plumbing goes. `lrv_music_open` (`lrvne/music.h`) assembles the path: an
+`lrv_opnq` in front of the core the user chose (`cfg->opn_core`), a mixer
+whose main source is the queue, and the device. Give it the driver as the
+queue's sequencer. Which kind depends on how the driver keeps time:
 
 - **Clock-driven** (the driver counts the chip's master clocks, typically
   because it models the chip's timers): set `seq.run_until`. It performs
@@ -125,13 +125,14 @@ depends on how the driver keeps time:
 Registers the driver expects to find set go in with `lrv_opnq_poke`. Set
 `bus_clocks` to `LRV_OPN_FM_DIV` unless the original's writes were unspaced.
 
-Rates: create the queue first, ask the device for `lrv_opnq_rate` (a core may
-insist on its own rate), and if `lrv_mixer_open` answers another rate, try
-`lrv_opnq_set_rate`; if the core cannot follow, use `lrv_opn_lite_ops`, which
-renders at any rate. Then `lrv_mixer_start`. Register `lrv_mixer_pump` as a
-pump hook whatever the delivery model: it does nothing where the backend
-pulls. If the game waits on the music even without a device, give the mixer
-an `idle` callback that keeps the driver's clock.
+Rates: the core is created first and the device asked for its rate (a core
+may insist on its own); when the device answers another rate the core follows
+it or the light core takes over. Set the driver up to count in
+`lrv_music_rate`, then `lrv_music_start`. Register `lrv_mixer_pump` (with
+the music's mixer) as a pump hook whatever the delivery model: it does
+nothing where the backend pulls. If the game waits on the music even without
+a device, set `idle_rate` and the frame rate: the driver's time then passes
+by a frame's worth of samples every frame.
 
 Locking: where the backend pulls, the driver runs on its audio thread. Every
 call the engine makes into the driver or the queue from the game (start a
@@ -139,8 +140,8 @@ song, fade, read its position) is bracketed with `lrv_mixer_lock` /
 `lrv_mixer_unlock`, never nested. The headless backend's `--audio pull` aborts
 on a nested lock, which finds the mistakes without a sound card.
 
-Offline rendering (`render_music`) is the same path with a mixer that has no
-device: `lrv_mixer_start(&m, rate)` and `lrv_mixer_render` in a loop. Compare
+Offline rendering (`render_music`) is the same path without a device
+(`LRV_MUSIC_OFFLINE`): `lrv_music_start` and `lrv_mixer_render` in a loop. Compare
 the recorded checksum; `gain_floor` selects how the volume rounds.
 
 ## 6. Voice

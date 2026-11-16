@@ -3,10 +3,10 @@
  * (lrvne/opn.h), rendered in sample time.
  *
  * On the original machines a music driver ran from the chip's timer interrupts, independent of
- * the game. Here the driver (the "sequencer", which stays in the engine) advances with the
- * samples rendered: lrv_opnq_render() runs it as far as the block it was asked for and renders
- * the chip in between its register writes, each write taking effect before the sample it falls
- * on. Two kinds of sequencer are served, and a queue is set up for one of them:
+ * the game. Here the driver (the "sequencer": the engine's or an lrvne module) advances with
+ * the samples rendered: lrv_opnq_render() runs it as far as the block it was asked for and
+ * renders the chip in between its register writes, each write taking effect before the sample
+ * it falls on. Two kinds of sequencer are served, and a queue is set up for one of them:
  *
  *   clock-driven (seq.run_until)   The sequencer counts master clocks of the chip. Before a
  *       block is rendered it is run up to the clock of the block's end and stamps every write
