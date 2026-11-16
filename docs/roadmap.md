@@ -26,10 +26,3 @@ queue), keys that register on release (the key-down map's edge), effects timed
 by CPU speed (`lrv_sys_cpu`, with a reference speed that has to be measured),
 and interpreters that poll a music driver in a loop with no wait (charge CPU
 work per statement so time passes).
-
-## Small gaps reported by the engines already on lrvne
-
-Worked around in the engines today; each is a small, additive change here.
-
-- Hooks can be added to an `lrv_sys` but not removed; an engine whose tick
-  handler comes and goes keeps one permanent hook that dispatches.

@@ -186,11 +186,41 @@ int lrv_sys_add_hook(struct lrv_sys *s, int stage, lrv_hook_fn *fn, void *ctx)
     return LRV_OK;
 }
 
-static void run_hooks(struct lrv_sys *s, int stage)
+/* closes the gaps hooks removed during a run left */
+static void compact_hooks(struct lrv_sys *s, int stage)
+{
+    struct lrv_hook *h = s->hooks[stage];
+    int i, n = 0;
+    for (i = 0; i < s->nhooks[stage]; i++)
+        if (h[i].fn)
+            h[n++] = h[i];
+    s->nhooks[stage] = n;
+}
+
+int lrv_sys_remove_hook(struct lrv_sys *s, int stage, lrv_hook_fn *fn, void *ctx)
 {
     int i;
+    if (stage < 0 || stage >= LRV_HOOK_STAGES || !fn)
+        return LRV_ERR_NOTFOUND;
     for (i = 0; i < s->nhooks[stage]; i++)
-        s->hooks[stage][i].fn(s->hooks[stage][i].ctx);
+        if (s->hooks[stage][i].fn == fn && s->hooks[stage][i].ctx == ctx) {
+            s->hooks[stage][i].fn = 0;
+            if (!s->hook_depth[stage])
+                compact_hooks(s, stage);
+            return LRV_OK;
+        }
+    return LRV_ERR_NOTFOUND;
+}
+
+static void run_hooks(struct lrv_sys *s, int stage)
+{
+    int i, n = s->nhooks[stage];            /* the hooks added during the run wait */
+    s->hook_depth[stage]++;
+    for (i = 0; i < n; i++)
+        if (s->hooks[stage][i].fn)          /* not removed meanwhile */
+            s->hooks[stage][i].fn(s->hooks[stage][i].ctx);
+    if (!--s->hook_depth[stage])
+        compact_hooks(s, stage);
 }
 
 void lrv_sys_present_now(struct lrv_sys *s)

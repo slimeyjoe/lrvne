@@ -357,6 +357,73 @@ static void trace_to(const struct lrv_trace_event *ev)
     ntraced++;
 }
 
+static struct lrv_sys *hs;
+
+static void hook_once(void *ctx)            /* removes itself */
+{
+    strcat(order, (const char *)ctx);
+    CHECK(lrv_sys_remove_hook(hs, LRV_HOOK_TICK, hook_once, ctx) == LRV_OK);
+}
+
+static void hook_cut(void *ctx)             /* removes the "c" after it, adds an "n" */
+{
+    strcat(order, (const char *)ctx);
+    if (lrv_sys_remove_hook(hs, LRV_HOOK_TICK, hook_a, "c") == LRV_OK)
+        CHECK(lrv_sys_add_hook(hs, LRV_HOOK_TICK, hook_a, "n") == LRV_OK);
+}
+
+static void hook_wait(void *ctx)            /* a frame inside a frame: the stage nests */
+{
+    strcat(order, (const char *)ctx);
+    if (hs->frame < 3)
+        lrv_sys_frame_wait(hs);
+}
+
+static void test_hooks(void)
+{
+    struct lrv_hal hal;
+    struct lrv_sys s;
+
+    th_hal(&hal);
+    memset(&th_next_input, 0, sizeof th_next_input);
+    lrv_sys_init(&s, &hal, 640, 400);
+    hs = &s;
+
+    /* outside a run: removed at once, the others keep their order */
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_a, "a");
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_a, "b");
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_a, "a");
+    CHECK(lrv_sys_remove_hook(&s, LRV_HOOK_TICK, hook_a, "a") == LRV_OK && s.nhooks[1] == 2);
+    CHECK(lrv_sys_remove_hook(&s, LRV_HOOK_TICK, hook_a, "x") == LRV_ERR_NOTFOUND);
+    CHECK(lrv_sys_remove_hook(&s, LRV_HOOK_PUMP, hook_a, "b") == LRV_ERR_NOTFOUND);
+    CHECK(lrv_sys_remove_hook(&s, 9, hook_a, "b") == LRV_ERR_NOTFOUND);
+    order[0] = 0;
+    lrv_sys_frame_wait(&s);
+    CHECK(!strcmp(order, "ba"));
+
+    /* inside a run: a hook removes itself, one removes a later hook (which no longer runs) and
+     * adds one (which runs from the next frame) */
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_once, "o");
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_cut, "k");
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_a, "c");
+    order[0] = 0;
+    lrv_sys_frame_wait(&s);
+    CHECK(!strcmp(order, "baok"));
+    CHECK(s.nhooks[1] == 4);                    /* b a k n: the gaps closed */
+    order[0] = 0;
+    lrv_sys_frame_wait(&s);
+    CHECK(!strcmp(order, "bakn"));
+
+    /* a hook that waits for a frame: the inner run does not close the outer run's gaps */
+    lrv_sys_init(&s, &hal, 640, 400);
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_wait, "w");
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_once, "o");
+    lrv_sys_add_hook(&s, LRV_HOOK_TICK, hook_a, "z");
+    order[0] = 0;
+    lrv_sys_frame_wait(&s);     /* w waits frames 2 and 3; o goes in 3; z runs in each frame */
+    CHECK(!strcmp(order, "wwwozzz") && s.nhooks[1] == 2 && !s.hook_depth[1]);
+}
+
 static void test_trace(void)
 {
     static const uint8_t m0[] = "yes", m1[] = "no";
@@ -483,6 +550,7 @@ int main(void)
     test_profile_pack();
     test_meta();
     test_sys();
+    test_hooks();
     test_trace();
     test_motion();
     test_keys();

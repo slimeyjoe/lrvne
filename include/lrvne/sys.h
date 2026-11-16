@@ -57,8 +57,9 @@ struct lrv_sys {
     uint32_t frame;                         /* frames since lrv_sys_init */
     uint32_t cpu;                           /* work spent since the last frame (lrv_sys_cpu) */
     uint32_t cpu_per_frame;                 /* the reference machine's speed; 0 = not modelled */
-    struct lrv_hook hooks[LRV_HOOK_STAGES][LRV_HOOKS_MAX];
+    struct lrv_hook hooks[LRV_HOOK_STAGES][LRV_HOOKS_MAX];   /* fn NULL: removed */
     int nhooks[LRV_HOOK_STAGES];
+    int hook_depth[LRV_HOOK_STAGES];        /* runs of the stage in progress (a hook may wait) */
     lrv_hook_fn *present;
     void *present_ctx;
 
@@ -75,6 +76,11 @@ void lrv_sys_init(struct lrv_sys *s, const struct lrv_hal *hal, int ptr_w, int p
 void lrv_sys_set_present(struct lrv_sys *s, lrv_hook_fn *present, void *ctx);
 /* Adds a hook (they run in the order added). Returns LRV_ERR_RANGE when the stage is full. */
 int  lrv_sys_add_hook(struct lrv_sys *s, int stage, lrv_hook_fn *fn, void *ctx);
+/* Removes the hook added with fn and ctx (the first, if it was added twice); the others keep
+ * their order. LRV_ERR_NOTFOUND when there is none. Hooks may add and remove hooks, their own
+ * included: one removed while its stage runs does not run again, one added runs from the
+ * stage's next run. */
+int  lrv_sys_remove_hook(struct lrv_sys *s, int stage, lrv_hook_fn *fn, void *ctx);
 void lrv_sys_frame_wait(struct lrv_sys *s);
 /* Presents now, outside the frame (before a long computation). */
 void lrv_sys_present_now(struct lrv_sys *s);
