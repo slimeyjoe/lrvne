@@ -195,8 +195,10 @@ int lrv_glyph_blit(struct lrv_surface *s, int col, int y, const uint8_t *glyph, 
             continue;
         for (r = 0; r < rows; r++) {
             const uint8_t *g = glyph + r * wbytes;
-            for (k = 0; k < wbytes; k++)
-                d[k] = (uint8_t)(fgb ? (cell | g[k]) : (cell & ~g[k]));
+            for (k = 0; k < wbytes; k++) {
+                uint8_t keep = bg == LRV_GLYPH_CLEAR ? d[k] : cell;
+                d[k] = (uint8_t)(fgb ? (keep | g[k]) : (keep & ~g[k]));
+            }
             d += s->stride;
         }
     }
@@ -214,6 +216,16 @@ int lrv_glyph_blit(struct lrv_surface *s, int col, int y, const uint8_t *glyph, 
         lrv_rect_union(dirty, &r4);
     }
     return 1;
+}
+
+uint8_t lrv_glyph_bold8_plain(uint8_t row)
+{
+    return (uint8_t)(row | row << 1);
+}
+
+uint16_t lrv_glyph_bold16_plain(uint16_t row)
+{
+    return (uint16_t)(row | row << 1);
 }
 
 uint8_t lrv_glyph_bold8(uint8_t al)

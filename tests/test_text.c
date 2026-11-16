@@ -253,7 +253,8 @@ static void test_blit(void)
         glyph[i] = (uint8_t)(i * 37 + 11);
 
     for (t = 0; t < 64; t++) {
-        int wb = 1 + (t & 1), fg = (t * 5) & 15, bg = (t * 3 + 1) & 15;
+        int wb = 1 + (t & 1), fg = (t * 5) & 15;
+        int bg = t % 5 == 4 ? LRV_GLYPH_CLEAR : (t * 3 + 1) & 15;
         int col = (t * 3) % (SSTR - 1), y = (t * 7) % (SH - 16), x, yy, bad = 0;
         unsigned planes = t < 48 ? 15u : (unsigned)(t & 15);
         for (p = 0; p < 4; p++)
@@ -274,7 +275,9 @@ static void test_blit(void)
                     int gx = x - col * 8;
                     int ink = glyph[(yy - y) * wb + gx / 8] >> (7 - (gx & 7)) & 1;
                     /* the planes written take the colour's bit, the others keep theirs */
-                    want = (int)(((unsigned)(ink ? fg : bg) & planes) | ((unsigned)old & ~planes));
+                    int c = ink ? fg : bg == LRV_GLYPH_CLEAR ? old : bg;
+                    /* (a transparent cell keeps the old colour where there is no ink) */
+                    want = (int)(((unsigned)c & planes) | ((unsigned)old & ~planes));
                 }
                 if (pixel(&s, x, yy) != want)
                     bad = 1;
@@ -309,6 +312,12 @@ static void test_bold(void)
     CHECK(lrv_glyph_bold16(0x8001) == 0x8003);          /* nothing leaves the cell */
     CHECK(lrv_glyph_bold8(0x80) == 0x80);
     CHECK(lrv_glyph_bold8_right(0x10) == 0x18 && lrv_glyph_bold8_right(0x01) == 0x01);
+    /* the plain form merges strokes one pixel apart and lets the leftmost pixel go */
+    CHECK(lrv_glyph_bold8_plain(0x05) == 0x0F && lrv_glyph_bold8_plain(0x81) == 0x83);
+    CHECK(lrv_glyph_bold16_plain(0x0500) == 0x0F00 && lrv_glyph_bold16_plain(0x8080) == 0x8180);
+    for (v = 0; v < 0x10000; v++)
+        CHECK(lrv_glyph_bold16_plain((uint16_t)v) == (uint16_t)(v | v << 1) &&
+              lrv_glyph_bold8_plain((uint8_t)v) == (uint8_t)(v | v << 1));
     /* the two routines agree wherever the 8-pixel row does not touch its left edge */
     for (v = 0; v < 0x80; v++)
         CHECK(lrv_glyph_bold8((uint8_t)v) == (lrv_glyph_bold16((uint16_t)v) & 0xFF));

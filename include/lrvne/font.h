@@ -98,9 +98,12 @@ int lrv_text_next_utf8(const uint8_t *s, const struct lrv_font *font8, struct lr
 
 /* ---- drawing ---------------------------------------------------------------------------- */
 
-/* An opaque glyph cell into an LRV_FMT_PLANAR4 surface: `rows` lines of `wbytes` columns at
- * column `col`, line y, every pixel of the cell set to colour fg where the glyph has a 1 and
- * to bg elsewhere. Only the planes whose bit is set in `planes` are written (15 = all). The
+#define LRV_GLYPH_CLEAR (-1)     /* bg of lrv_glyph_blit: a transparent cell */
+
+/* A glyph cell into an LRV_FMT_PLANAR4 surface: `rows` lines of `wbytes` columns at column
+ * `col`, line y, every pixel of the cell set to colour fg where the glyph has a 1 and to bg
+ * elsewhere; with bg LRV_GLYPH_CLEAR the pixels without ink keep what they had (a transparent
+ * cell). Only the planes whose bit is set in `planes` are written (15 = all). The
  * cell is addressed as the machines do, by its plane offset y * stride + col: it is drawn
  * whole or, when it would start before or end past the plane, not at all (returns 0). The
  * rectangle written is added to *dirty when dirty is not NULL. Returns 1 when drawn. */
@@ -113,5 +116,9 @@ int lrv_glyph_blit(struct lrv_surface *s, int col, int y, const uint8_t *glyph, 
 uint8_t  lrv_glyph_bold8(uint8_t row);
 uint8_t  lrv_glyph_bold8_right(uint8_t row);
 uint16_t lrv_glyph_bold16(uint16_t row);
+/* The plain form: every pixel also inks the pixel to its left (row | row << 1), strokes one
+ * pixel apart merge; the leftmost pixel's extension leaves the cell. */
+uint8_t  lrv_glyph_bold8_plain(uint8_t row);
+uint16_t lrv_glyph_bold16_plain(uint16_t row);
 
 #endif
