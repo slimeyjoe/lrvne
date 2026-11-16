@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* AmigaOS 3.x on the 68k (TARGET=amiga): defaults and drivers (flavour.h). */
+#include <stddef.h>
 #include "os_begin.h"
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -42,6 +43,14 @@ int am_snap_capture(const struct am_snapinfo *si, const char *path)
     (void)si; (void)path;
     return 0;                       /* the host takes it (snap.c) */
 }
+
+/* The main task's stack. A shell gives a program 4 KB unless told otherwise (`Stack`), an icon
+ * what its stack field says, and an engine on lrvne needs more than 4 KB (xenon: 6.8 KB at the
+ * start of a game; a stack that runs over goes on into whatever memory lies below it). vbcc's
+ * startup code gives the program a stack of at least __stack bytes, allocating a new one and
+ * swapping to it when it was started with less; core/main.c's high-water mark measures that
+ * stack (the task's bounds, which StackSwap sets). */
+size_t __stack = 32768;
 
 int am_main_stack(int (*body)(void))
 {
