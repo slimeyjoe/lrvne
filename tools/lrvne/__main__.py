@@ -12,7 +12,7 @@ import importlib
 import os
 import sys
 
-TOOLS = ('cdimg', 'diskimg', 'inventory', 'pmd', 'source', 'voicepack', 'xfont', 'xpak')
+TOOLS = ('cdimg', 'diskimg', 'exepack', 'inventory', 'pmd', 'source', 'voicepack', 'xfont', 'xpak')
 
 
 def _bootstrap() -> None:
