@@ -104,5 +104,6 @@ a pretend 26K board, interrupt by interrupt. For every interrupt the test checks
 register writes, in the same order, at the same master clock, and the same status after it.
 It also checks that advancing in output samples puts each write on the sample of its clock.
 
-The engines that use the module compare it with recordings of their games' songs, played by
-the real driver.
+The engines that use the module compare it with their games' songs as the real driver plays
+them: `test_pmd LOG SONG [SSG-TABLE]` replays a log of the same format made from a game's song
+(with the game's installer options in its first line, and PMD's own SSG-effect table).

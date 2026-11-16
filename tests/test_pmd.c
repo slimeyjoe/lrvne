@@ -5,13 +5,16 @@
  * interrupt at its own master clock; the register writes must be the same, in the same order,
  * at the same clocks, and so must the driver's status after each interrupt. Then the frame-
  * driven path: the same song advanced in output samples puts each write on the sample of its
- * clock. Run from the repository's root (make test does). */
+ * clock. Run from the repository's root (make test does).
+ *
+ * `test_pmd LOG SONG [SSG-TABLE]` replays one log given on the command line instead: an engine
+ * checks the module against the real driver on its game's songs this way. */
 #ifdef LRV_HAVE_PMD
 #include "test_hal.h"
 #include "lrvne/pmd.h"
 
 #define DATA "tests/data/pmd/"
-#define MAXW (1u << 20)
+#define MAXW (1u << 22)          /* writes of one log */
 
 /* what the driver wrote, with the clock it wrote at */
 static struct wr { uint64_t clock; uint8_t reg, val; } *got;
@@ -232,9 +235,27 @@ static void test_frames(void)
     free(m);
 }
 
-int main(void)
+/* With arguments, one log of the engine's own (a game's song run by the real driver, written
+ * as tests/data/pmd/README.md describes): test_pmd LOG SONG [SSG-TABLE] */
+static int replay_one(int argc, char **argv)
+{
+    int n;
+    got = malloc(sizeof *got * MAXW);
+    n = replay(argv[1], argv[2], argc > 3 ? argv[3] : 0);
+    free(got);
+    printf("%s: %d interrupts, %s\n", argv[1], n, th_fails ? "they differ" : "the same");
+    return th_fails ? 1 : 0;
+}
+
+int main(int argc, char **argv)
 {
     int n = 0;
+    if (argc == 3 || argc == 4)
+        return replay_one(argc, argv);
+    if (argc != 1) {
+        fprintf(stderr, "usage: test_pmd [LOG SONG [SSG-TABLE]]\n");
+        return 2;
+    }
     got = malloc(sizeof *got * MAXW);
     n += replay(DATA "synth1.log", DATA "SYNTH1.M", 0);
     n += replay(DATA "synth1-fade.log", DATA "SYNTH1.M", 0);
