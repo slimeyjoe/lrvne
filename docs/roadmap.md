@@ -31,8 +31,6 @@ work per statement so time passes).
 
 Worked around in the engines today; each is a small, additive change here.
 
-- `lrv_sys_trace_items` carries one integer (`a0`); events with items and two
-  integers are built by hand.
 - Hooks can be added to an `lrv_sys` but not removed; an engine whose tick
   handler comes and goes keeps one permanent hook that dispatches.
 - Relative mouse motion is that of the last poll only; an engine that reads it

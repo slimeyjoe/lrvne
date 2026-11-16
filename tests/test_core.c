@@ -306,6 +306,58 @@ static void test_sys(void)
     CHECK(lrv_sys_quitting(&s) && !lrv_sys_resetting(&s));
 }
 
+static struct lrv_trace_event traced;
+static int ntraced;
+
+static void trace_to(const struct lrv_trace_event *ev)
+{
+    traced = *ev;
+    ntraced++;
+}
+
+static void test_trace(void)
+{
+    static const uint8_t m0[] = "yes", m1[] = "no";
+    static const uint8_t *const items[] = { m0, m1 };
+    static const int ints[] = { 7, 8, 9 };
+    struct lrv_hal hal;
+    struct lrv_sys s;
+    struct lrv_trace_event ev;
+
+    th_hal(&hal);
+    lrv_sys_init(&s, &hal, 640, 400);
+    ntraced = 0;
+    /* nobody listens: begin says so and nothing is sent */
+    CHECK(!LRV_TRACING(&s) && !lrv_sys_trace_begin(&s, &ev, LRV_TR_ENGINE));
+    lrv_sys_trace(&s, LRV_TR_ENGINE, "x", 0, 1, 2, 3, 4);
+    CHECK(ntraced == 0);
+
+    hal.trace = trace_to;
+    s.frame = 42;
+    s.script_name = "start";
+    s.script_pos = 0x123;
+    /* the general form: stamped, the rest zero, any fields the engine sets */
+    memset(&ev, 0x55, sizeof ev);
+    CHECK(lrv_sys_trace_begin(&s, &ev, LRV_TR_ENGINE + 1));
+    CHECK(ev.kind == LRV_TR_ENGINE + 1 && ev.tick == 42 && ev.pos == 0x123);
+    CHECK(!strcmp(ev.script, "start") && !ev.name && !ev.items && !ev.ints && !ev.a3);
+    ev.items = items;
+    ev.n = 2;
+    ev.a0 = 1;
+    ev.a1 = 5;
+    lrv_sys_trace_send(&s, &ev);
+    CHECK(ntraced == 1 && traced.items == items && traced.n == 2);
+    CHECK(traced.a0 == 1 && traced.a1 == 5 && traced.tick == 42);
+
+    /* the shorthands are the same events */
+    lrv_sys_trace_items(&s, LRV_TR_ENGINE, items, 2, 1);
+    CHECK(ntraced == 2 && traced.items == items && traced.a0 == 1 && !traced.a1);
+    lrv_sys_trace_ints(&s, LRV_TR_ENGINE, "op", ints, 3, 9);
+    CHECK(traced.ints == ints && traced.nints == 3 && !strcmp(traced.name, "op"));
+    lrv_sys_trace(&s, LRV_TR_WAIT, 0, m0, 1, 2, 3, 4);
+    CHECK(traced.text == m0 && traced.a3 == 4 && traced.pos == 0x123 && ntraced == 4);
+}
+
 static void test_keys(void)
 {
     int k;
@@ -330,6 +382,7 @@ int main(void)
     test_profile();
     test_profile_pack();
     test_sys();
+    test_trace();
     test_keys();
     if (th_fails) {
         fprintf(stderr, "test_core: %d failed\n", th_fails);

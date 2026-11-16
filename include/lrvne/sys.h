@@ -108,6 +108,18 @@ void lrv_sys_mouse_set(struct lrv_sys *s, int x, int y);
 
 #define LRV_TRACING(s) ((s)->hal->trace != 0)
 
+/* The general form, for an event of any shape. lrv_sys_trace_begin fills the stamp (kind, tick,
+ * script, pos), zeroes the rest and returns 1; it returns 0 when nobody listens, and then the
+ * event need not be filled or sent:
+ *     struct lrv_trace_event ev;
+ *     if (lrv_sys_trace_begin(s, &ev, MY_TR_MENU)) {
+ *         ev.items = items; ev.n = n; ev.a0 = cur; ev.a1 = flags;
+ *         lrv_sys_trace_send(s, &ev);
+ *     }
+ * The functions after these are shorthands for the common shapes. */
+int  lrv_sys_trace_begin(const struct lrv_sys *s, struct lrv_trace_event *ev, int kind);
+void lrv_sys_trace_send(struct lrv_sys *s, const struct lrv_trace_event *ev);
+
 void lrv_sys_trace(struct lrv_sys *s, int kind, const char *name, const uint8_t *text,
                    int a0, int a1, int a2, int a3);
 void lrv_sys_trace_ints(struct lrv_sys *s, int kind, const char *name, const int *ints, int n,

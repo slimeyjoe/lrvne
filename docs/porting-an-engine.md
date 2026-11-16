@@ -151,7 +151,8 @@ states, never presses to wait for.
 ## 8. Traces
 
 Replace the engine's event reporting with `lrv_sys_trace` (and `_ints`,
-`_items`). The kinds every engine shares are in `lrvne/trace.h`: report every
+`_items`); an event of another shape is `lrv_sys_trace_begin`, the fields it
+needs, `lrv_sys_trace_send`. The kinds every engine shares are in `lrvne/trace.h`: report every
 wait with `LRV_TR_WAIT` on entering and leaving, and quit and reset. Number
 the engine's own kinds from `LRV_TR_ENGINE`, list their names in
 `struct lrv_app`, and say in `wait_is_input` which wait kinds wait for the

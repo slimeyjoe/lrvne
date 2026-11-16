@@ -213,51 +213,57 @@ void lrv_sys_cpu(struct lrv_sys *s, uint32_t n)
 
 /* ---- trace ----------------------------------------------------------------------------- */
 
-static void trace_base(const struct lrv_sys *s, struct lrv_trace_event *ev, int kind)
+int lrv_sys_trace_begin(const struct lrv_sys *s, struct lrv_trace_event *ev, int kind)
 {
+    if (!s->hal->trace)
+        return 0;
     memset(ev, 0, sizeof *ev);
     ev->kind = kind;
     ev->tick = s->frame;
     ev->pos = s->script_pos;
     ev->script = s->script_name;
+    return 1;
+}
+
+void lrv_sys_trace_send(struct lrv_sys *s, const struct lrv_trace_event *ev)
+{
+    if (s->hal->trace)
+        s->hal->trace(ev);
 }
 
 void lrv_sys_trace(struct lrv_sys *s, int kind, const char *name, const uint8_t *text,
                    int a0, int a1, int a2, int a3)
 {
     struct lrv_trace_event ev;
-    if (!s->hal->trace)
+    if (!lrv_sys_trace_begin(s, &ev, kind))
         return;
-    trace_base(s, &ev, kind);
     ev.name = name;
     ev.text = text;
     ev.a0 = a0; ev.a1 = a1; ev.a2 = a2; ev.a3 = a3;
-    s->hal->trace(&ev);
+    lrv_sys_trace_send(s, &ev);
 }
 
 void lrv_sys_trace_ints(struct lrv_sys *s, int kind, const char *name, const int *ints, int n,
                         int a0)
 {
     struct lrv_trace_event ev;
-    if (!s->hal->trace)
+    if (!lrv_sys_trace_begin(s, &ev, kind))
         return;
-    trace_base(s, &ev, kind);
     ev.name = name;
     ev.ints = ints;
     ev.nints = n;
     ev.a0 = a0;
-    s->hal->trace(&ev);
+    lrv_sys_trace_send(s, &ev);
 }
 
 void lrv_sys_trace_items(struct lrv_sys *s, int kind, const uint8_t *const *items, int n,
                          int a0)
 {
     struct lrv_trace_event ev;
-    if (!s->hal->trace)
+    if (!lrv_sys_trace_begin(s, &ev, kind))
         return;
-    trace_base(s, &ev, kind);
     ev.items = items;
     ev.n = n;
     ev.a0 = a0;
-    s->hal->trace(&ev);
+    lrv_sys_trace_send(s, &ev);
 }
