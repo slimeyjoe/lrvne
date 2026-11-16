@@ -91,6 +91,31 @@ in the same state as on the host uses an autoplay spec driven by the input waits
   `xwfb-run`, sound through a private PipeWire sink), for QEMU the pc-x86_64 boot ISO, for
   `check-dist.sh` the contrib archive's `lha`.
 
+## Hosted AROS and PipeWire
+
+Hosted AROS drives its interrupts with signals of its own Linux process, its timer with
+`SIGALRM`, which the kernel delivers to any thread of the process that does not block it. Its
+ALSA driver (AHI's `alsa.audio`, in AROS 2026.09) blocks every signal while it opens the
+device, so that the threads ALSA's PipeWire plugin starts there inherit a full mask; PipeWire
+1.6 (Fedora 44: 1.6.11) starts one more, `data-loop.0`, later, in `snd_pcm_hw_params`, outside
+that guard and with nothing blocked. When the timer signal lands on it, AROS's interrupt code
+runs on that host thread's stack beside AROS's own thread, and AROS stops with an alert (`Stack
+extends out of range`, `ReleaseSemaphore called in supervisor mode`) or a trap, in whichever
+task was current. Only runs with sound are affected: about half the runs of an engine's voice
+check failed this way, the runs with `AUDIO=none` never.
+
+So `aros.sh` starts AROSBootstrap (not the X server) with `XDG_CONFIG_HOME` on a run-local
+PipeWire client setting, `context.num-data-loops = 0` (PipeWire's own: no data-loop threads,
+the stream runs on the plugin's thread, which starts inside the guarded call). Every run says
+so in its log, and `lrvrig` prints the note (`aros.sh: note: ...`). `AROS_PW_DATA_LOOPS=1`
+keeps PipeWire's default, to see the fault. Whatever the cause, a crash fails the run:
+`lrvrig/aros.py` reads AROS's kernel console (`RUNDIR/boot.log`) for alerts, tasks outside
+their stack, traps and a second boot (AROSBootstrap starts AROS again after a crash).
+
+The fault is AROS's driver and reaches anyone who plays sound in hosted AROS through PipeWire;
+`backends/amiga/README.md` gives the same setting for that. Remove it here once the AROS
+release the rig runs guards the thread creation (or aims its signals at its own thread).
+
 ## The oracles
 
 `present.py` compares every snapshot with the headless build's frame of the same name

@@ -32,7 +32,10 @@
 # the run's HOME is RUNDIR, whose .asoundrc sends ALSA to a private PipeWire null sink that
 # exists only for the run (real-time pacing, nothing audible), recorded to RUNDIR/audio.wav
 # (AUDIO_OUT=host: the host's speakers; without pactl: no sink, run programs with AUDIO=none).
-# An ALSA null or file device does not do: it has no clock, and AHI hangs.
+# An ALSA null or file device does not do: it has no clock, and AHI hangs. AROS runs with a
+# PipeWire client setting without data-loop threads (README.md, "Hosted AROS and PipeWire": its
+# ALSA driver lets PipeWire 1.6 start that thread with AROS's signals unblocked, and AROS then
+# crashes now and then); run.log notes it; AROS_PW_DATA_LOOPS=1 keeps PipeWire's default.
 #
 # qemu: the files and a User-Startup are added to a copy of the ISO (xorriso; the live CD is
 # SYS:, read-only), so the commands' output goes to RAM:out.txt and leaves through dbgtype
@@ -62,7 +65,7 @@ inner() {
     cd "$R/AROS" || exit 1
     # its own process group: AROSBootstrap forks, and the whole group goes at the end (a
     # global for the trap: a local would be out of scope when the EXIT trap runs)
-    setsid boot/linux/AROSBootstrap >"$R/boot.log" 2>&1 &
+    ${AROS_XDG:+env XDG_CONFIG_HOME="$AROS_XDG"} setsid boot/linux/AROSBootstrap >"$R/boot.log" 2>&1 &
     AROS_PID=$!
     echo $AROS_PID >"$R/aros.pgid"     # for the caller, should the backstop kill this shell
     trap 'stop_group $AROS_PID' EXIT INT TERM
@@ -100,7 +103,7 @@ rundir() {
     mkdir -p "$1" || die "cannot make $1"
     R=$(cd "$1" && pwd)
     rm -rf "$R/AROS" "$R/Work" "$R/stage" "$R/shots" "$R/out.txt" "$R/run.log" "$R/boot.log" \
-        "$R/serial.log" "$R/aros.pgid" "$R/audio.wav"
+        "$R/serial.log" "$R/aros.pgid" "$R/audio.wav" "$R/xdg"
     mkdir -p "$R/shots"
 }
 
@@ -146,9 +149,23 @@ hosted)
         rec=$!
         trap 'kill $rec 2>/dev/null; wait $rec 2>/dev/null; pactl unload-module $mod' EXIT
     fi
+    # AROS's ALSA driver (AHI's alsa.audio, AROS 2026.09) blocks the host's signals only around
+    # opening the device; PipeWire 1.6 starts its data-loop thread later, in snd_pcm_hw_params,
+    # so the thread takes AROS's timer signal now and then and runs AROS's interrupt code on its
+    # own stack: an alert ("Stack extends out of range") or a trap. Without data loops the stream
+    # runs on the plugin's thread, which starts inside the guarded call. For AROS only (not the X
+    # server); AROS_PW_DATA_LOOPS=1 keeps PipeWire's default, to see the fault.
+    if [ "${AROS_PW_DATA_LOOPS:-0}" != 1 ]; then
+        mkdir -p "$R/xdg/pipewire/client.conf.d"
+        printf 'context.properties = {\n    context.num-data-loops = 0\n}\n' \
+            >"$R/xdg/pipewire/client.conf.d/lrvne-rig.conf"
+        export AROS_XDG=$R/xdg
+        echo "aros.sh: note: PipeWire without data-loop threads, for hosted AROS's ALSA driver" \
+             "(rigs/README.md; AROS_PW_DATA_LOOPS=1 keeps them)" >>"$R/run.log"
+    fi
     if [ "${NODISPLAY:-0}" = 1 ]; then
-        ( cd "$R/AROS" && env -u DISPLAY -u WAYLAND_DISPLAY timeout -k 5 "$secs" \
-              boot/linux/AROSBootstrap ) 2>&1 | tee "$R/boot.log"
+        ( cd "$R/AROS" && env -u DISPLAY -u WAYLAND_DISPLAY ${AROS_XDG:+XDG_CONFIG_HOME="$AROS_XDG"} \
+              timeout -k 5 "$secs" boot/linux/AROSBootstrap ) 2>&1 | tee "$R/boot.log"
         rc=0
     elif [ "${VISIBLE:-0}" = 1 ]; then
         timeout -k 10 "$secs" "$0" _inner "$R"

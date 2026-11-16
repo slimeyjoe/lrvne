@@ -461,6 +461,21 @@ the flavour changes:
 * snapshots read back from the screen by the program itself
   (`aros/snap_aros.c`).
 
+Hosted AROS 2026.09 with sound through PipeWire (ALSA's PipeWire plugin, as
+on current Linux desktops) stops now and then with "Stack extends out of
+range" or a trap, in whatever task is current: its ALSA driver lets PipeWire
+start a thread that takes AROS's timer signal (`rigs/README.md`, "Hosted AROS
+and PipeWire"). Nothing in the program can prevent it. Without sound
+(`AUDIO=none`) it does not happen; with sound, start AROS without PipeWire's
+data-loop threads:
+
+```sh
+mkdir -p ~/.config/aros-hosted/pipewire/client.conf.d
+printf 'context.properties = {\n    context.num-data-loops = 0\n}\n' \
+    >~/.config/aros-hosted/pipewire/client.conf.d/aros.conf
+XDG_CONFIG_HOME=~/.config/aros-hosted boot/linux/AROSBootstrap
+```
+
 ## Testing
 
 No test of these targets needs a human or game data.

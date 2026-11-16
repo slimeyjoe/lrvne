@@ -12,6 +12,7 @@ import glob
 import os
 import re
 import subprocess
+import sys
 
 from . import conf
 
@@ -22,19 +23,46 @@ OUTCOMES = {3: 'AROS ended before the commands were done', 4: 'the X server coul
             124: 'timeout (the backstop): the run did not end'}
 
 
+def crash(boot_log):
+    """What AROS's kernel console (RUNDIR/boot.log) says went wrong, or None: an alert, a task
+    found outside its stack, a trap, or a second boot (AROSBootstrap starts AROS again after a
+    crash, so a run that finished may still have crashed on the way)."""
+    alerts = re.findall(r'Error: (0x[0-9A-F]+ - [^#\n]*)', boot_log)
+    stack = re.findall(r'\[KRN\] Task (.*) went out of stack limits', boot_log)
+    traps = re.findall(r'\[KRN\] Trap signal (\d+)', boot_log)
+    boots = len(re.findall(r'Entering kernel', boot_log))
+    if alerts:
+        return 'hosted AROS stopped with an alert: %s (%d times)' % (alerts[0].strip(), len(alerts))
+    if stack:
+        return 'hosted AROS: task %s went out of its stack limits (%d times)' % (stack[0], len(stack))
+    if traps:
+        return 'hosted AROS: trap signal %s' % traps[0]
+    if boots > 1:
+        return 'hosted AROS booted %d times (it starts again after a crash)' % boots
+    return None
+
+
 class Run:
     """A finished run: its directory, aros.sh's log, the commands' output (out.txt) and the
-    problem when the run did not finish (None when it did)."""
+    problem when the run did not finish, or AROS crashed on the way (None when neither)."""
 
     def __init__(self, rundir, status, log, out):
         self.rundir = rundir
         self.status = status
         self.log = log
         self.out = out
-        self.problem = None
+        problems = []
         if status:
-            self.problem = 'hosted AROS: %s' % OUTCOMES.get(status, 'aros.sh exit %d: %s' % (
-                status, log.strip()[-300:]))
+            problems.append('hosted AROS: %s' % OUTCOMES.get(status, 'aros.sh exit %d: %s' % (
+                status, log.strip()[-300:])))
+        try:
+            with open(os.path.join(rundir, 'boot.log'), errors='replace') as f:
+                c = crash(f.read())
+        except OSError:
+            c = None
+        if c:
+            problems.append(c)
+        self.problem = '; '.join(problems) or None
 
     def work(self, *parts):
         """A path below the run's Work: (SYS:Work, or RUNDIR/Work after PRUNE)."""
@@ -61,6 +89,9 @@ def run(name, files, commands, timeout=None, prune=False, env=None):
     p = subprocess.run([ARGS_SH, 'hosted', rundir, str(timeout)],
                        input='\n'.join(commands) + '\n', text=True, env=e,
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    for line in p.stdout.splitlines():     # what the rig changed for the run (README.md)
+        if line.startswith('aros.sh: note:'):
+            print(line, file=sys.stderr)
     try:
         with open(os.path.join(rundir, 'out.txt'), errors='replace') as f:
             out = f.read()
