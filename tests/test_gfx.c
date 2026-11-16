@@ -274,6 +274,39 @@ static void test_palette(void)
     lrv_pal_lerp(from, from, tgt, 2, 2, 4);                     /* in place */
     CHECK(from[0] == 7 && from[1] == 8);
 
+    /* shift: add and clamp, both ways; a shift past the range gives the end */
+    for (i = 0; i < 48; i++)
+        from[i] = (uint8_t)(i & 15);
+    for (v = -16; v <= 16; v++) {
+        lrv_pal_shift(out, from, 48, v, 15);
+        for (i = 0; i < 48; i++) {
+            int want = (i & 15) + v;
+            CHECK(out[i] == (want < 0 ? 0 : want > 15 ? 15 : want));
+        }
+    }
+    lrv_pal_shift(from, from, 3, 2, 3);                         /* in place, another max */
+    CHECK(from[0] == 2 && from[1] == 3 && from[2] == 3);
+
+    /* the decrement-only step: components above the target go down, the others stay, and the
+     * step ends when none is above */
+    for (i = 0; i < 48; i++) {
+        cur[i] = (uint8_t)(rnd() & 15);
+        tgt[i] = (uint8_t)(rnd() & 15);
+    }
+    memcpy(from, cur, 48);
+    for (steps = 0; lrv_pal_step_down(cur, tgt, 48) != 0; steps++) {
+        for (i = 0; i < 48; i++) {
+            int above = from[i] - tgt[i];
+            CHECK(cur[i] == (above > steps + 1 ? from[i] - steps - 1 :
+                             above > 0 ? tgt[i] : from[i]));
+        }
+    }
+    CHECK(steps <= 15);
+    for (i = 0; i < 48; i++)
+        CHECK(cur[i] == (from[i] > tgt[i] ? tgt[i] : from[i]));
+    cur[0] = 3; tgt[0] = 5; cur[1] = 9; tgt[1] = 8; cur[2] = tgt[2] = 4;
+    CHECK(lrv_pal_step_down(cur, tgt, 3) == 1 && cur[0] == 3 && cur[1] == 8 && cur[2] == 4);
+
     /* brightness: round(v * level / 15), halves up; the ends are exact */
     for (v = 0; v < 16; v++) {
         CHECK(lrv_pal_bright(v, 15, 15) == v && lrv_pal_bright(v, 0, 15) == 0);

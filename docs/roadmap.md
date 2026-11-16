@@ -7,7 +7,6 @@ implemented.
 
 | Need | Size | Effect on existing interfaces |
 |---|---|---|
-| Palette helpers: add-and-clamp shift of all components; a step that only decrements | small | additive (`gfx.h`) |
 | Glyph helpers: plain OR bold (no gap kept), transparent OR, inverse, outline, double size | small | additive (`font.h`) |
 | YM2608 (OPNA) core: six FM channels, SSG, ADPCM-B; the vendored ymfm contains it | medium | a new ops structure and queue variant is additive; a register-bank bit in `opn.h` / `opnq.h` would change them |
 | A PCM channel in the sound path, for sample playback beside the FM chip (not voice clips) | medium | additive (`mixer.h`) |
@@ -28,4 +27,5 @@ work per statement so time passes).
 
 Done since the surveys: the font builder takes a raw glyph array, a font embedded in a
 program file (`xfont` `add_raw`, `--raw`); `tools/lrvne/exepack.py` undoes EXEPACK on the
-program files that hold game data.
+program files that hold game data. The palette helpers: an add-and-clamp shift of every
+component (`lrv_pal_shift`) and a step that only decrements (`lrv_pal_step_down`).

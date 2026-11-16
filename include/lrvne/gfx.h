@@ -136,7 +136,7 @@ void lrv_screen_present_hook(void *scr);
 
 /* ---- palette fade arithmetic ------------------------------------------------------------ */
 
-/* The three ways the engines step a palette, as functions over n components (bytes). They keep
+/* The ways the engines step a palette, as functions over n components (bytes). They keep
  * no time and no state: the engine sequences the steps as its original did. */
 
 /* Moves every component of cur one unit towards target. Returns how many changed: 0 means cur
@@ -147,6 +147,14 @@ int  lrv_pal_step_toward(uint8_t *cur, const uint8_t *target, size_t n);
  * truncating toward zero. step = steps gives `to`; steps must be positive. out may be from. */
 void lrv_pal_lerp(uint8_t *out, const uint8_t *from, const uint8_t *to, size_t n, int step,
                   int steps);
+
+/* Shift: out = in + d, clamped to 0..max (a fade that adds the same signed amount to every
+ * component). out may be in. */
+void lrv_pal_shift(uint8_t *out, const uint8_t *in, size_t n, int d, int max);
+
+/* A step that only decrements: every component of cur above its target goes down by one, the
+ * others stay. Returns how many changed: 0 means none is above its target. */
+int  lrv_pal_step_down(uint8_t *cur, const uint8_t *target, size_t n);
 
 /* Brightness: a component v at level 0..max is round(v * level / max), halves rounded up. */
 int  lrv_pal_bright(int v, int level, int max);

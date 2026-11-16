@@ -28,6 +28,28 @@ void lrv_pal_lerp(uint8_t *out, const uint8_t *from, const uint8_t *to, size_t n
     }
 }
 
+void lrv_pal_shift(uint8_t *out, const uint8_t *in, size_t n, int d, int max)
+{
+    size_t i;
+    for (i = 0; i < n; i++) {
+        int v = in[i] + d;
+        out[i] = (uint8_t)(v < 0 ? 0 : v > max ? max : v);
+    }
+}
+
+int lrv_pal_step_down(uint8_t *cur, const uint8_t *target, size_t n)
+{
+    size_t i;
+    int changed = 0;
+    for (i = 0; i < n; i++) {
+        if (cur[i] > target[i]) {
+            cur[i]--;
+            changed++;
+        }
+    }
+    return changed;
+}
+
 int lrv_pal_bright(int v, int level, int max)
 {
     return (v * level * 2 + max) / (2 * max);
