@@ -78,8 +78,7 @@ struct demo {
     uint8_t palette[16 * 3];            /* at full brightness; the DAC gets it faded */
     int fade, block_col, paused, palette_stopped;
     uint8_t cells[NCELLS];              /* what each cell shows now */
-    int ptr_col, ptr_y;                 /* the pointer overlay: where it was drawn, and */
-    uint8_t ptr_under[4][POINTER_H][2]; /* what it covers */
+    struct lrv_pointer pointer;         /* the pointer overlay */
 
     /* sound; in pull mode the sequencer runs on the audio thread, under the audio lock */
     struct lrv_music music;
@@ -125,46 +124,15 @@ static void demo_text(struct demo *d, int col, int y, const char *text, int colo
     lrv_screen_mark_surface(&d->screen, s, &dirty);
 }
 
-/* The software pointer, an overlay of the screen: `apply` draws it into the displayed page
- * just before a present and keeps what it covers, `restore` puts that back right after, so
- * the engine never finds the pointer in its pages. */
-static void demo_pointer(struct demo *d, struct lrv_surface *page, struct lrv_rect *dirty,
-                         int draw)
-{
-    static const uint8_t shape[POINTER_H] = { 0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xE0, 0xB0, 0x18 };
-    int shift = d->sys.mouse_x & 7, p, r, k;
-    struct lrv_rect rect;
-
-    if (draw) {
-        d->ptr_col = d->sys.mouse_x / 8;
-        d->ptr_y = d->sys.mouse_y;
-    }
-    for (p = 0; p < 4; p++)
-        for (r = 0; r < POINTER_H && d->ptr_y + r < page->h; r++)
-            for (k = 0; k < 2 && d->ptr_col + k < page->stride; k++) {
-                uint8_t *b = page->plane[p] + (d->ptr_y + r) * page->stride + d->ptr_col + k;
-                if (draw) {
-                    d->ptr_under[p][r][k] = *b;
-                    *b |= (uint8_t)((shape[r] << 8 >> shift) >> (k ? 0 : 8));   /* colour 15 */
-                } else {
-                    *b = d->ptr_under[p][r][k];
-                }
-            }
-    rect.x0 = d->ptr_col; rect.y0 = d->ptr_y;
-    rect.x1 = d->ptr_col + 2; rect.y1 = d->ptr_y + POINTER_H;
-    lrv_rect_clip(&rect, page);
-    lrv_rect_union(dirty, &rect);
-}
-
-static void demo_pointer_apply(void *ctx, struct lrv_surface *page, struct lrv_rect *dirty)
-{
-    demo_pointer(ctx, page, dirty, 1);
-}
-
-static void demo_pointer_restore(void *ctx, struct lrv_surface *page, struct lrv_rect *dirty)
-{
-    demo_pointer(ctx, page, dirty, 0);
-}
+/* The software pointer, an overlay of the screen (lrvne/gfx.h): drawn into the displayed page
+ * just before a present, what it covers put back right after, so the engine never finds the
+ * pointer in its pages. It follows the pointer lrv_sys keeps. */
+static const uint16_t demo_pointer_rows[POINTER_H] = {
+    0x8000, 0xC000, 0xE000, 0xF000, 0xF800, 0xE000, 0xB000, 0x1800
+};
+static const struct lrv_pointer_shape demo_pointer_shape = {
+    demo_pointer_rows, demo_pointer_rows, POINTER_H, 0, 0, 15, 0
+};
 
 /* Both pages from nothing: page 0 is the test pattern, page 1 (Tab) the bars lying down. */
 static void demo_draw_screen(struct demo *d)
@@ -421,7 +389,11 @@ static int demo_run(void *ctx, const struct lrv_hal *hal, const struct lrv_run_c
     /* two pages where the display hardware reaches them, no off-screen buffers */
     if (lrv_screen_init(&d->screen, hal, &video.mode, 2, 0, LRV_MEM_ANY) != LRV_OK)
         lrv_fatal(hal, "demo: no memory for the screen");
-    lrv_screen_add_overlay(&d->screen, demo_pointer_apply, demo_pointer_restore, d);
+    lrv_pointer_init(&d->pointer, &demo_pointer_shape);
+    d->pointer.shown = 1;
+    d->pointer.follow_x = &d->sys.mouse_x;
+    d->pointer.follow_y = &d->sys.mouse_y;
+    lrv_screen_add_overlay(&d->screen, lrv_pointer_apply, lrv_pointer_restore, &d->pointer);
 
     /* the frame: pump the audio, present the screen, wait, poll the input */
     lrv_sys_init(&d->sys, hal, video.mode.w, video.mode.h);

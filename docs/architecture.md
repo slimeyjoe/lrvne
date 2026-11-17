@@ -74,6 +74,11 @@ and size, the dirty rectangle, the scroll line, the palette with its size and
 depth, the display switch. `lrv_frame_hash32` of a frame is the same number on
 every backend and host, which is what tests compare pictures by.
 
+A mouse pointer the engine draws itself is a ready-made overlay,
+`struct lrv_pointer` (`lrvne/gfx.h`): the engine gives the shape, its two
+colours and hot spot, and says where the pointer is and whether it is seen;
+the drawing, what it covers and the dirty rectangle are the library's.
+
 ## The HAL contract
 
 `include/lrvne/hal.h` is the contract; in short:
@@ -233,5 +238,13 @@ Everything is tested without a human and without game data.
   protocol knows no engine: an engine names its trace kinds and says which of
   its waits wait for input in its `struct lrv_app`. `backends/control/control.c`
   lists the lines and the commands.
+- **The dirty rectangle's audit.** A snapshot and a hash are taken from the
+  whole page, so they also have what the engine changed without marking it,
+  which a display that uploads only dirty rectangles never shows. Control mode
+  therefore keeps the page as the dirty rectangles alone would have left it
+  (`lrv_shot_audit`, `backends/common/shot.h`) and ends the run with exit code
+  1 at the first frame where the two differ, naming the column and the line.
+  An engine's own test HAL can call the same function from its
+  `video_present`.
 - **Readback.** On a backend that really renders, `readback` returns the
   pixels the renderer produced, to be compared with the engine's page.

@@ -32,7 +32,7 @@ on it adds the interpreter and formats of one original engine; a game is then a
 | `include/lrvne/` | the public headers, one per module; each is its module's documentation. `hal.h` is the interface to the host, `app.h` the one between an engine and a backend |
 | `src/core` | `sys`: the frame loop with its hooks, the input queue, quit and reset, trace events; `core`: errors, logging, allocation; key names |
 | `src/pack`, `src/profile` | the asset pack reader (languages, entries read in ranges) and the game profile parser |
-| `src/gfx` | `screen`: pages, dirty rectangles, palette, overlays, presentation; palette fades, the frame hash; planar-to-chunky conversion and integer scaling for backends |
+| `src/gfx` | `screen`: pages, dirty rectangles, palette, overlays, presentation; a software mouse pointer; palette fades, the frame hash; planar-to-chunky conversion and integer scaling for backends |
 | `src/text` | glyph tables, Shift-JIS and UTF-8, glyph cells into planar pages, reflow of translated text |
 | `src/snd` | the OPN (YM2203) cores, the register-write queue that runs a music driver in sample time, the mixer (push and pull delivery), the music path assembled from them, the voice clip player; PMD 4.7g, an optional music driver ([its document](docs/pmd.md)) |
 | `src/codec` | LZSS; the voice clip decoders (8-bit PCM, delta codes, Opus) |

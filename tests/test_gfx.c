@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Unit tests of the graphics modules: the screen and its overlays, palette fade arithmetic,
+/* Unit tests of the graphics modules: the screen and its overlays, the software pointer, palette fade
+ * arithmetic,
  * the frame hash, planar to chunky conversion and scaling. Pages are filled with pseudo-random
  * bytes; conversions are compared with pixel-by-pixel references. */
 #include "test_hal.h"
@@ -8,6 +9,7 @@
 #include "lrvne/pc98.h"
 #include "lrvne/scale.h"
 #include "lrvne/sys.h"
+#include "shot.h"
 
 #define W      LRV_PC98_W
 #define H      LRV_PC98_H
@@ -240,6 +242,107 @@ static void test_screen(void)
 }
 
 /* ---- palette ----------------------------------------------------------------------------- */
+
+/* ---- the software pointer ------------------------------------------------------------------ */
+
+static const uint16_t g_ptr_ink[5]  = { 0x0000, 0x4002, 0x6000, 0x4001, 0x0000 };
+static const uint16_t g_ptr_mask[5] = { 0xC003, 0xE003, 0xF000, 0xE001, 0xC001 };
+static const struct lrv_pointer_shape g_ptr_shape = { g_ptr_ink, g_ptr_mask, 5, 3, 2, 9, 6 };
+
+static struct lrv_pointer *g_ptr;       /* the pointer the frame is checked against */
+static uint8_t g_ptr_ref[4][PLANE];     /* the page without it */
+static struct lrv_shot g_ptr_shown;     /* the page as the dirty rectangles left it */
+static int g_ptr_frames, g_ptr_pixels;
+
+static int px(const struct lrv_surface *s, uint8_t ref[4][PLANE], int x, int y)
+{
+    int p, c = 0;
+    for (p = 0; p < 4; p++) {
+        const uint8_t *pl = s ? s->plane[p] : ref[p];
+        c |= ((pl[y * STRIDE + x / 8] >> (7 - (x & 7))) & 1) << p;
+    }
+    return c;
+}
+
+/* every pixel of the frame is the page's or the pointer's, and all of it was called dirty */
+static void ptr_present(const struct lrv_frame *f)
+{
+    const struct lrv_pointer_shape *sh = g_ptr->shape;
+    int x, y, bad = 0, col, line;
+
+    for (y = 0; y < H; y++)
+        for (x = 0; x < W; x++) {
+            int sx = x - (g_ptr->x - sh->hot_x), sy = y - (g_ptr->y - sh->hot_y);
+            int want = px(0, g_ptr_ref, x, y);
+            if (g_ptr->shown && sx >= 0 && sx < 16 && sy >= 0 && sy < sh->h &&
+                ((sh->mask[sy] >> (15 - sx)) & 1)) {
+                want = ((sh->ink[sy] >> (15 - sx)) & 1) ? sh->fg : sh->bg;
+                g_ptr_pixels++;
+            }
+            bad += px(f->page, 0, x, y) != want;
+        }
+    CHECK(bad == 0);
+    CHECK(lrv_shot_audit(&g_ptr_shown, f, &col, &line) == 0);
+    g_ptr_frames++;
+}
+
+static void test_pointer(void)
+{
+    static const int at[][2] = {
+        { 320, 200 }, { 321, 200 }, { 327, 201 }, { 328, 50 }, { 0, 0 }, { 2, 1 }, { 3, 2 },
+        { W - 1, H - 1 }, { W - 13, H - 3 }, { -40, 100 }, { W + 40, 100 }, { 100, -9 },
+        { 100, H + 9 }, { 7, H - 1 }, { W - 1, 0 }, { 320, 200 }
+    };
+    struct lrv_hal hal;
+    struct lrv_screen scr;
+    struct lrv_pointer ptr;
+    int fx = 77, fy = 99, p;
+    unsigned i;
+
+    th_hal(&hal);
+    hal.video_present = ptr_present;
+    CHECK(lrv_screen_init(&scr, &hal, &lrv_pc98_video_mode, 1, 0, 0) == LRV_OK);
+    fill_random(&scr.page[0]);
+    for (p = 0; p < 4; p++)
+        memcpy(g_ptr_ref[p], scr.page[0].plane[p], PLANE);
+    lrv_pointer_init(&ptr, &g_ptr_shape);
+    g_ptr = &ptr;
+    CHECK(lrv_screen_add_overlay(&scr, lrv_pointer_apply, lrv_pointer_restore, &ptr) == LRV_OK);
+
+    lrv_screen_present(&scr);           /* hidden: nothing drawn */
+    CHECK(g_ptr_pixels == 0);
+    ptr.shown = 1;
+    for (i = 0; i < sizeof at / sizeof at[0]; i++) {
+        ptr.x = at[i][0];
+        ptr.y = at[i][1];
+        lrv_screen_present(&scr);
+        /* the page itself never holds the pointer */
+        for (p = 0; p < 4; p++)
+            CHECK(!memcmp(g_ptr_ref[p], scr.page[0].plane[p], PLANE));
+    }
+    CHECK(g_ptr_pixels > 0);
+    /* seen, hidden, seen again where another variable says it is */
+    ptr.shown = 0;
+    lrv_screen_present(&scr);
+    ptr.shown = 1;
+    ptr.follow_x = &fx;
+    ptr.follow_y = &fy;
+    lrv_screen_present(&scr);
+    CHECK(ptr.x == 77 && ptr.y == 99);
+    fx = 300;
+    lrv_screen_present(&scr);
+    CHECK(ptr.x == 300);
+    /* the engine draws under it meanwhile */
+    scr.page[0].plane[2][99 * STRIDE + 300 / 8] ^= 0xFF;
+    g_ptr_ref[2][99 * STRIDE + 300 / 8] ^= 0xFF;
+    lrv_screen_mark(&scr, 0, 300 / 8, 99, 300 / 8 + 1, 100);
+    lrv_screen_present(&scr);
+    for (p = 0; p < 4; p++)
+        CHECK(!memcmp(g_ptr_ref[p], scr.page[0].plane[p], PLANE));
+    CHECK(g_ptr_frames == 21);
+    lrv_shot_free(&g_ptr_shown);
+    lrv_screen_free(&scr);
+}
 
 static void test_palette(void)
 {
@@ -605,6 +708,7 @@ int main(void)
         pg.plane[p] = mem[p];
 
     test_screen();
+    test_pointer();
     test_palette();
     test_hash(&pg);
     fill_random(&pg);

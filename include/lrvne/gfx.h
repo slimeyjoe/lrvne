@@ -12,6 +12,8 @@
  * pair of functions; `apply` draws into the displayed page keeping what was under it, `restore`
  * puts that back after the present.
  *
+ * A ready-made overlay is here too: the software pointer (struct lrv_pointer).
+ *
  * Also here: arithmetic of palette fades (no timing, no state) and the hash of a presented
  * frame that tests and backends compare pictures by.
  *
@@ -133,6 +135,45 @@ int  lrv_screen_add_overlay(struct lrv_screen *scr, lrv_overlay_apply_fn *apply,
 void lrv_screen_present(struct lrv_screen *scr);
 /* The same as an lrv_hook_fn: lrv_sys_set_present(sys, lrv_screen_present_hook, scr). */
 void lrv_screen_present_hook(void *scr);
+
+/* ---- a software pointer ------------------------------------------------------------------ */
+
+/* A mouse pointer as an overlay: drawn into the presented picture at a pixel position, what it
+ * covers kept and put back, the rectangle it touched reported in the units a present expects.
+ * An engine describes the shape and says where the pointer is and whether it is seen; when its
+ * machine showed and hid the pointer is the engine's to decide. LRV_FMT_PLANAR4 pages only. */
+
+#define LRV_POINTER_W     16    /* pixels a row of a shape holds */
+#define LRV_POINTER_H_MAX 16
+
+struct lrv_pointer_shape {
+    const uint16_t *ink;        /* h rows, the leftmost pixel the msb: pixels of colour fg */
+    const uint16_t *mask;       /* h rows: every pixel the pointer covers; those not in ink
+                                 * have colour bg (an outline) */
+    int h;                      /* rows, 1 .. LRV_POINTER_H_MAX */
+    int hot_x, hot_y;           /* the pixel of the shape that is at the pointer's position */
+    uint8_t fg, bg;             /* colour indices */
+};
+
+struct lrv_pointer {
+    const struct lrv_pointer_shape *shape;
+    int x, y;                   /* where it is, in pixels of the page; any value: it is clipped */
+    int shown;                  /* 0: not drawn */
+    const int *follow_x, *follow_y; /* when set, x and y are read from here at every apply
+                                     * (&sys.mouse_x, &sys.mouse_y) */
+    /* what the last apply drew, for restore */
+    int drawn, col, top;
+    uint8_t under[LRV_MAX_PLANES][LRV_POINTER_H_MAX][LRV_POINTER_W / 8 + 1];
+};
+
+/* Hidden, at (0, 0), following nothing. */
+void lrv_pointer_init(struct lrv_pointer *ptr, const struct lrv_pointer_shape *shape);
+
+/* The overlay's two functions, ctx a struct lrv_pointer:
+ *   lrv_screen_add_overlay(scr, lrv_pointer_apply, lrv_pointer_restore, &ptr);
+ * An engine with conditions of its own wraps them and sets x, y and shown before the apply. */
+void lrv_pointer_apply(void *ptr, struct lrv_surface *page, struct lrv_rect *dirty);
+void lrv_pointer_restore(void *ptr, struct lrv_surface *page, struct lrv_rect *dirty);
 
 /* ---- palette fade arithmetic ------------------------------------------------------------ */
 

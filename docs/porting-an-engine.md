@@ -97,7 +97,12 @@ Replace page memory, dirty tracking and the palette with a
 - palette writes are `lrv_screen_set_colour` / `lrv_screen_set_palette`; the
   timing of a fade stays in the engine, its arithmetic is `lrv_pal_*`;
 - anything drawn only for the eye (the mouse pointer, a text layer above the
-  graphics) becomes an overlay;
+  graphics) becomes an overlay; for the pointer there is `struct lrv_pointer`,
+  which follows `sys.mouse_x` / `mouse_y` or is placed by the engine. A
+  rectangle's columns are bytes of a planar page, not pixels
+  (`lrvne/surface.h`): an overlay of your own that reports pixels is drawn in
+  every snapshot and missing on every display, and only the dirty rectangle's
+  audit (control mode, or `lrv_shot_audit` in a test HAL) tells;
 - `lrv_sys_set_present(&sys, lrv_screen_present_hook, &screen)`.
 
 The frame hash is defined by the library now (`lrv_frame_hash32`); compare the
