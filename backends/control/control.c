@@ -59,6 +59,7 @@ static const char *const g_own_kinds[LRV_TR_ENGINE] = {
 static const struct lrv_app *g_app;
 static struct lrv_video_mode g_mode;
 static struct lrv_shot g_shot;              /* the frame of the last present */
+static struct lrv_shot g_shown;             /* the page as its dirty rectangles left it */
 
 static uint32_t g_pending;                  /* LRV_EV_* edges for the next poll */
 static struct lrv_keypress g_keys[LRV_KEYQ];/* key presses for the next poll */
@@ -226,9 +227,19 @@ void lrv_ctl_video(const struct lrv_video_mode *mode)
     g_mode = *mode;
 }
 
+/* Every frame's dirty rectangle is audited (shot.h): a change the engine did not report would
+ * be missing on a real display while every snapshot and hash here had it, so the run ends. */
 void lrv_ctl_present(const struct lrv_frame *frame)
 {
+    int col = 0, line = 0;
+
     lrv_shot_capture(&g_shot, frame);
+    if (lrv_shot_audit(&g_shown, frame, &col, &line) == 1) {
+        char msg[96];
+        snprintf(msg, sizeof msg, "present: the page changed outside its dirty rectangle "
+                 "(column %d, line %d)", col, line);
+        lrv_ctl_exit(1, msg);
+    }
 }
 
 /* ---- commands ----------------------------------------------------------------------------- */
@@ -469,5 +480,6 @@ void lrv_ctl_exit(int code, const char *msg)
     putchar('}');
     out_end();
     lrv_shot_free(&g_shot);
+    lrv_shot_free(&g_shown);
     exit(code);
 }

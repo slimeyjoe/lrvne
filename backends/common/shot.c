@@ -57,6 +57,40 @@ int lrv_shot_capture(struct lrv_shot *s, const struct lrv_frame *f)
     return LRV_OK;
 }
 
+int lrv_shot_audit(struct lrv_shot *s, const struct lrv_frame *f, int *col, int *line)
+{
+    const struct lrv_surface *pg = f->page;
+    size_t plane;
+    int p, y;
+
+    if (!supported(f))
+        return LRV_ERR_RANGE;
+    plane = (size_t)lrv_surface_plane_bytes(pg);
+    if (!s->valid || s->size != NPLANES * plane + (size_t)f->colours * 3 || f->page_switched ||
+        !f->dirty || s->page.w != pg->w || s->page.h != pg->h || s->page.stride != pg->stride)
+        return lrv_shot_capture(s, f);
+    if (!lrv_rect_empty(f->dirty)) {
+        struct lrv_rect r = *f->dirty;
+        lrv_rect_clip(&r, pg);
+        for (p = 0; p < NPLANES && r.x0 < r.x1; p++)
+            for (y = r.y0; y < r.y1; y++)
+                memcpy(s->page.plane[p] + y * pg->stride + r.x0,
+                       pg->plane[p] + y * pg->stride + r.x0, (size_t)(r.x1 - r.x0));
+    }
+    for (p = 0; p < NPLANES; p++) {
+        size_t i;
+        if (!memcmp(s->page.plane[p], pg->plane[p], plane))
+            continue;
+        for (i = 0; s->page.plane[p][i] == pg->plane[p][i]; i++)
+            ;
+        *col = (int)(i % (size_t)pg->stride);
+        *line = (int)(i / (size_t)pg->stride);
+        lrv_shot_capture(s, f);
+        return 1;
+    }
+    return 0;
+}
+
 void lrv_shot_free(struct lrv_shot *s)
 {
     free(s->mem);

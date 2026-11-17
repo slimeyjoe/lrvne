@@ -181,6 +181,22 @@ rc=0
 "$exe" --control --storage "$tmp/store" </dev/null >"$tmp/ctl2" || rc=$?
 [ "$rc" -eq 4 ] || fail "control: a closed pipe gave exit code $rc"
 
+# the pointer moved about, also to the edges: every frame's dirty rectangle is audited in
+# control mode, so the session ends with code 1 if the overlay reports less than it draws
+"$exe" --control --storage "$tmp/store" >"$tmp/ctl3" <<'EOF' || fail "control: the pointer's session exited with $?"
+run 2
+mouse 100 100
+run 2
+mouse 639 399
+run 2
+mouse 3 0
+run 2
+mouse 100 100
+run 2
+quit
+EOF
+grep -q '"ev":"exit","code":0' "$tmp/ctl3" || fail "control: the pointer's session did not end by quit"
+
 # ---- limits, sound, errors --------------------------------------------------------------------
 rc=0
 "$exe" --storage "$tmp/store" --max-ticks 50 >/dev/null 2>"$tmp/ticks.err" || rc=$?

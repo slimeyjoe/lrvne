@@ -615,7 +615,38 @@ static void test_shot(void)
         CHECK(strstr(text, "}\n\"YWI=\"\"YQ==\"") != 0);
     }
     lrv_shot_free(&shot);
+
+    /* the audit: what a frame calls dirty is all that changed */
+    {
+        struct lrv_rect dirty;
+        int col = -1, line = -1;
+        memset(&shot, 0, sizeof shot);
+        f.dirty = &dirty;
+        lrv_rect_clear(&dirty);
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 0 && shot.valid);  /* the first: all */
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 0);
+        planes[2][3] = 0x55;                    /* column 1 of line 1, reported */
+        lrv_rect_add(&dirty, 1, 1, 2, 2);
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 0);
+        planes[1][0] = 0x55;                    /* column 0 of line 0, reported in pixels */
+        lrv_rect_clear(&dirty);
+        lrv_rect_add(&dirty, 0 * 8 + 8, 0, 16, 1);
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 1 && col == 0 && line == 0);
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 0);    /* told once */
+        planes[3][2] = 0x55;                    /* not reported at all */
+        lrv_rect_clear(&dirty);
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 1 && col == 0 && line == 1);
+        planes[0][1] = 0x55;                    /* a switched page or no rectangle: all */
+        f.page_switched = 1;
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 0);
+        f.page_switched = 0;
+        planes[0][1] = 0xAA;
+        f.dirty = 0;
+        CHECK(lrv_shot_audit(&shot, &f, &col, &line) == 0);
+        lrv_shot_free(&shot);
+    }
     page.format = LRV_FMT_INDEXED8;
+    CHECK(lrv_shot_audit(&shot, &f, 0, 0) == LRV_ERR_RANGE);
     CHECK(lrv_shot_capture(&shot, &f) == LRV_ERR_RANGE);
 }
 

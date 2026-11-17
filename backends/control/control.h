@@ -49,7 +49,8 @@ void lrv_ctl_init(const struct lrv_app *app);
 void lrv_ctl_video(const struct lrv_video_mode *mode);
 /* hal->trace. */
 void lrv_ctl_trace(const struct lrv_trace_event *ev);
-/* video_present: keeps a copy of the frame. */
+/* video_present: keeps a copy of the frame, and ends the run (exit code 1) when the page
+ * changed outside the frame's dirty rectangle. */
 void lrv_ctl_present(const struct lrv_frame *frame);
 /* frame_wait, after the tick counter advanced; blocks reading commands at a stop. */
 void lrv_ctl_tick(uint32_t tick);

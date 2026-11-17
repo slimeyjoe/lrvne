@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Frames and sound taken out of a running engine, for tests: a copy of a presented frame, its
- * hashes, its snapshot line and picture file, and a WAV writer.
+/* Frames and sound taken out of a running engine, for tests: a copy of a presented frame, the
+ * audit of its dirty rectangle, its hashes, its snapshot line and picture file, and a WAV
+ * writer.
  *
  * A frame describes itself (lrvne/hal.h), so nothing here needs the video mode; only
  * LRV_FMT_PLANAR4 pages are understood.
@@ -37,6 +38,15 @@ void lrv_shot_free(struct lrv_shot *s);
 /* 64-bit FNV-1a over everything a present is given (planes, palette, display-on, scroll line):
  * equal hashes mean the frame did not change. */
 uint64_t lrv_shot_hash64(const struct lrv_frame *f);
+
+/* The dirty rectangle's audit. `shown` is the page as a backend that uploads only what a frame
+ * calls dirty has it: this brings it up to date the way such a backend would (everything on
+ * the first frame, when the page is switched or dirty is NULL, else the dirty rectangle), then
+ * compares it with the page. Returns 0 when they are equal. Else 1: something on the page
+ * changed outside what was reported, which no such backend would show; *col and *line are the
+ * first byte column and line that differ, and `shown` is the page again. LRV_ERR_RANGE or
+ * LRV_ERR_NOMEM as lrv_shot_capture. Call it for every frame presented. */
+int lrv_shot_audit(struct lrv_shot *shown, const struct lrv_frame *f, int *col, int *line);
 
 /* Bytes of the nibble-packed picture, and the picture itself into out. */
 size_t lrv_shot_indices_size(const struct lrv_frame *f);
