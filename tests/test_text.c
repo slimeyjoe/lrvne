@@ -427,6 +427,73 @@ static void test_reflow(void)
           cp == 0x105 && c == 2);
 }
 
+static void layout_from(const char *text, int width, int height, int last, int first_line,
+                        int first_col, int indent, unsigned flags)
+{
+    struct lrv_reflow_at at;
+    at.first_line = first_line;
+    at.first_col = first_col;
+    at.indent = indent;
+    at.flags = flags;
+    lrv_reflow_layout_from((const uint8_t *)text, width, height, last, &at, cols_fn, &g_calls,
+                           &g_lay);
+}
+
+static int line_at(int k, int row, int col)
+{
+    return k < g_lay.nlines && g_lay.line[k].row == row && g_lay.line[k].col == col;
+}
+
+static void test_reflow_from(void)
+{
+    /* the plain layout: rows within the page, column 0 */
+    layout("a\nb\nc", 10, 2, 10);
+    CHECK(line_at(0, 0, 0) && line_at(1, 1, 0) && line_at(2, 0, 0));
+
+    /* on line 2 of a page: line 3 is the page's last (3 wide), then the next page */
+    layout_from("aaa bbb ccc ddd", 5, 4, 3, 2, 0, 0, 0);
+    CHECK(g_lay.nlines == 4 && g_lay.npages == 2);
+    CHECK(line_is(0, 0, 3, 3, 0) && line_at(0, 2, 0) && line_is(1, 4, 7, 3, 0) &&
+          line_at(1, 3, 0) && line_is(2, 8, 11, 3, 1) && line_at(2, 0, 0) &&
+          line_is(3, 12, 15, 3, 1) && line_at(3, 1, 0));
+
+    /* after a prefix of 4 columns, a hanging indent of 2 */
+    layout_from("aa bb cc dd ee", 10, 3, 10, 0, 4, 2, 0);
+    CHECK(g_lay.nlines == 2 && line_is(0, 0, 5, 5, 0) && line_at(0, 0, 4) &&
+          line_is(1, 6, 14, 8, 0) && line_at(1, 1, 2));
+    /* the indent holds on the next page too */
+    layout_from("aa bb cc dd", 7, 1, 7, 0, 3, 2, 0);
+    CHECK(g_lay.nlines == 3 && line_at(0, 0, 3) && line_at(1, 0, 2) && line_at(2, 0, 2) &&
+          g_lay.line[2].page == 2);
+
+    /* a first word that does not fit after the prefix but fits below: the first line stays
+     * empty; one that is no better off below is broken on the first line */
+    layout_from("abcdef", 10, 3, 10, 0, 8, 2, 0);
+    CHECK(g_lay.nlines == 2 && line_is(0, 0, 0, 0, 0) && line_at(0, 0, 8) &&
+          line_is(1, 0, 6, 6, 0) && line_at(1, 1, 2));
+    layout_from("abcdefghijk", 10, 3, 10, 0, 2, 2, 0);
+    CHECK(g_lay.nlines == 2 && line_is(0, 0, 8, 8, 0) && line_is(1, 8, 11, 3, 0));
+
+    /* kept indentation: at the start and after a line break, not after a wrap; an indent the
+     * word does not fit after goes with the word */
+    layout_from("  ab\n   cd ef", 6, 5, 6, 0, 0, 0, LRV_REFLOW_KEEP_INDENT);
+    CHECK(g_lay.nlines == 3 && line_is(0, 0, 4, 4, 0) && line_is(1, 5, 10, 5, 0) &&
+          line_is(2, 11, 13, 2, 0));
+    layout_from("    abcdef", 6, 5, 6, 0, 0, 0, LRV_REFLOW_KEEP_INDENT);
+    CHECK(g_lay.nlines == 1 && line_is(0, 4, 10, 6, 0));
+    layout_from("  ab", 6, 5, 6, 0, 0, 0, 0);          /* without the flag: dropped */
+    CHECK(g_lay.nlines == 1 && line_is(0, 2, 4, 2, 0));
+
+    /* a full page before the text: it starts on the next; a page break before anything
+     * leaves the caller's lines */
+    layout_from("a", 10, 4, 10, 4, 0, 0, 0);
+    CHECK(g_lay.nlines == 1 && line_is(0, 0, 1, 1, 1) && line_at(0, 0, 0));
+    layout_from("\fa", 10, 4, 10, 2, 0, 0, 0);
+    CHECK(g_lay.nlines == 1 && line_is(0, 1, 2, 1, 1) && line_at(0, 0, 0));
+    layout_from("", 10, 4, 10, 2, 3, 0, 0);
+    CHECK(g_lay.nlines == 0 && g_lay.npages == 0);
+}
+
 int main(void)
 {
     test_sjis();
@@ -435,6 +502,7 @@ int main(void)
     test_blit();
     test_bold();
     test_reflow();
+    test_reflow_from();
     if (th_fails) {
         fprintf(stderr, "test_text: %d failed\n", th_fails);
         return 1;

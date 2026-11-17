@@ -29,3 +29,6 @@ Done since the surveys: the font builder takes a raw glyph array, a font embedde
 program file (`xfont` `add_raw`, `--raw`); `tools/lrvne/exepack.py` undoes EXEPACK on the
 program files that hold game data. The palette helpers: an add-and-clamp shift of every
 component (`lrv_pal_shift`) and a step that only decrements (`lrv_pal_step_down`).
+Reflow: a translated passage can continue a page the engine already began
+(`lrv_reflow_layout_from`: its first line, a start column after a speaker's name, a hanging
+indent, indentation kept), with `tools/lrvne/reflow.py` as the Python reference.
