@@ -4,6 +4,17 @@
 #include "lrvne/profile.h"
 #include "lrvne/sys.h"
 
+/* ---- version ----------------------------------------------------------------------------- */
+
+static void test_version(void)
+{
+    char v[32];
+
+    /* the string is the three numbers (scripts/check-version.sh holds it to the git tag) */
+    snprintf(v, sizeof v, "%d.%d.%d", LRV_VERSION_MAJOR, LRV_VERSION_MINOR, LRV_VERSION_PATCH);
+    CHECK(!strcmp(v, LRV_VERSION));
+}
+
 /* ---- pack -------------------------------------------------------------------------------- */
 
 static void test_pack(void)
@@ -545,6 +556,7 @@ static void test_keys(void)
 
 int main(void)
 {
+    test_version();
     test_pack();
     test_profile();
     test_profile_pack();

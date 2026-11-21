@@ -7,7 +7,8 @@
 #   make test [SAN=1]               build and run the unit tests, then the demo headless
 #                                   (tests/smoke.sh; host target). SAN=1: with the sanitizers,
 #                                   in a build directory of its own (build/<target>-san)
-#   make check                      test + the tools' tests + the leak check
+#   make check                      test + the tools' tests + the leak check + the version against
+#                                   the release tags (scripts/check-version.sh)
 #   make opn68k                     the 68k assembly FM loop against its C reference on an
 #                                   emulated 68040 (tests/opn68k.sh says what it needs)
 #   make clean
@@ -69,6 +70,7 @@ check: test
 	$(Q)if [ -d tools/tests ]; then python3 -I -m unittest discover -s tools/tests -t tools; \
 	    else echo "check: no tools/tests, skipping the tools' tests"; fi
 	$(Q)scripts/check-leaks.sh tree
+	$(Q)scripts/check-version.sh
 
 # cross tools only: the same whatever TARGET is
 opn68k:
