@@ -20,8 +20,8 @@
 /* the release (tagged vMAJOR.MINOR.PATCH in git; scripts/check-version.sh keeps them in step) */
 #define LRV_VERSION_MAJOR 0
 #define LRV_VERSION_MINOR 2
-#define LRV_VERSION_PATCH 1
-#define LRV_VERSION       "0.2.1"
+#define LRV_VERSION_PATCH 2
+#define LRV_VERSION       "0.2.2"
 
 enum lrv_err {
     LRV_OK           = 0,

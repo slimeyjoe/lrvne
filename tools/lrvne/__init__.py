@@ -10,9 +10,11 @@ Modules:
   profile    the game profile text (include/lrvne/profile.h)
   xfont      BDF/PCF bitmap fonts to XFNT glyph tables
   voicepack  the voice pack builder
+  refcache   test references kept between runs, keyed by the content of what they depend on
 
 `python3 -I tools/lrvne TOOL ...` runs a tool's command line; a script that uses the modules
 puts the `tools` directory on `sys.path` first (see tools/README.md).
 """
 
-__all__ = ['cdimg', 'diskimg', 'inventory', 'profile', 'source', 'voicepack', 'xfont', 'xpak']
+__all__ = ['cdimg', 'diskimg', 'inventory', 'profile', 'refcache', 'source', 'voicepack',
+           'xfont', 'xpak']

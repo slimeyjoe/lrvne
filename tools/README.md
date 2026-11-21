@@ -20,6 +20,7 @@ files make up a game, and what they are, is an engine's inventory and an engine'
 | `exepack` | undoes Microsoft EXEPACK on DOS executables that hold game data (tables, fonts, texts) |
 | `reflow` | the layout of translated text (`src/text/reflow.c` in Python): the reference an engine's tests compare its layout with; a library module, no command line |
 | `voicepack` | the voice pack: clips, the `voice` description, optional Opus transcoding |
+| `refcache` | an engine's test references (the original under emulation, models) kept between runs, keyed by the content of the code they loaded, the data they read and their arguments; modes on, off, refresh, verify (`REFCACHE`); an engine adds its own files, data and salts, or subclasses the key |
 | `pmd` | PMD 4.7g data for the PMD module: the SSG-effect table out of a player's PMD.COM; the test songs |
 
 Each module's docstring is its reference: formats, API, command line.
